@@ -1,6 +1,6 @@
 """M2: восстановление пропусков в ТО (высота, диаметр, возраст породы) — CatBoost, на GPU при наличии.
 
-    python3 -m ml.m2_impute.train [--device GPU] [--iterations 3000] [--targets height diameter age]
+    python3 -m ml.m2_impute.train [--device auto|GPU|CPU] [--gpu-mem-mb 4096] [--wait-gpu 30] [--iterations 3000]
 
 Валидация — по кварталам (GroupShuffleSplit), чтобы не было утечки соседних выделов.
 Базлайн — медиана по (порода, бонитет, ярус). Выход: models/impute/<target>.cbm + meta.json + metrics.json
@@ -15,6 +15,7 @@ import time
 import numpy as np
 import pandas as pd
 
+from ml import gpu
 from ml.common import load_processed
 from ml.m2_impute.features import CAT_FEATURES, FEATURES, TARGETS, row_features
 from forestmerge import schema as S
@@ -55,7 +56,10 @@ def build_frame(data: dict, meta: dict, target: str, rng: np.random.Generator, d
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--device", default="CPU", choices=["CPU", "GPU"])
+    ap.add_argument("--device", default="auto", choices=["auto", "GPU", "CPU"],
+                    help="auto — GPU, если хватает свободной видеопамяти, иначе CPU")
+    ap.add_argument("--gpu-mem-mb", type=int, default=4096, help="сколько видеопамяти резервировать CatBoost")
+    ap.add_argument("--wait-gpu", type=float, default=0, help="ждать освобождения GPU до N минут")
     ap.add_argument("--iterations", type=int, default=3000)
     ap.add_argument("--depth", type=int, default=8)
     ap.add_argument("--lr", type=float, default=0.05)
@@ -70,6 +74,16 @@ def main() -> None:
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+    # CatBoost на GPU по умолчанию резервирует 95 % ВСЕЙ видеопамяти и падает, если её часть занята
+    # другими процессами. Поэтому резервируем явно: не больше --gpu-mem-mb и не больше свободного − 1 ГБ.
+    device, info = gpu.choose(a.device, need_mb=a.gpu_mem_mb + 1024, wait_min=a.wait_gpu)
+    gpu_kw: dict = {}
+    if device == "GPU":
+        part = min(a.gpu_mem_mb, info["free_mb"] - 1024) / info["total_mb"]
+        gpu_kw = {"gpu_ram_part": round(max(0.05, part), 3), "devices": "0"}
+    else:
+        gpu_kw = {"thread_count": -1}
+    print(f"[m2] устройство: {device} {info} {gpu_kw}", flush=True)
     data = load_processed()
     meta = {"targets": {t: TARGETS[t] for t in a.targets}, "features": FEATURES, "cat_features": CAT_FEATURES,
             "top_categories": top_categories(data["general"], data["layers"])}
@@ -80,8 +94,8 @@ def main() -> None:
         X, y, groups = build_frame(data, meta, t, rng)
         tr, va = next(GroupShuffleSplit(1, test_size=0.15, random_state=a.seed).split(X, y, groups))
         model = CatBoostRegressor(iterations=a.iterations, depth=a.depth, learning_rate=a.lr, loss_function="RMSE",
-                                  eval_metric="MAE", task_type=a.device, random_seed=a.seed, od_type="Iter", od_wait=200,
-                                  verbose=200, train_dir=str(out / "catboost_info"))
+                                  eval_metric="MAE", task_type=device, random_seed=a.seed, od_type="Iter", od_wait=200,
+                                  verbose=200, train_dir=str(out / "catboost_info"), **gpu_kw)
         model.fit(Pool(X.iloc[tr], y[tr], cat_features=CAT_FEATURES), eval_set=Pool(X.iloc[va], y[va],
                   cat_features=CAT_FEATURES), use_best_model=True)
         pred = model.predict(X.iloc[va])

@@ -1,6 +1,7 @@
 """M1: самообучение энкодера выделов (masked modeling) на всей выгрузке ТО. Рассчитан на RTX 4090.
 
     python3 -m ml.m1_encoder.train --epochs 40 --batch 512 --d-model 384 --layers 8     # ~14M параметров
+    python3 -m ml.m1_encoder.train --wait-gpu 60      # подождать до часа, пока на общем GPU освободится память
     python3 -m ml.m1_encoder.train --epochs 1 --limit 3000 --out out/smoke_models/encoder # быстрая проверка
 
 Маскируем 25 % известных числовых значений (H, D, возраст, запас, полнота…), 15 % пород и 20 % общих
@@ -74,15 +75,27 @@ def main() -> None:
     ap.add_argument("--out", default=str(MODELS_DIR / "encoder"))
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--no-onnx", action="store_true")
+    ap.add_argument("--device", default="auto", choices=["auto", "GPU", "CPU"],
+                    help="auto — GPU, если свободно ≥ --gpu-mem-mb, иначе CPU (медленнее, но работает)")
+    ap.add_argument("--gpu-mem-mb", type=int, default=6000, help="сколько видеопамяти нужно (с запасом)")
+    ap.add_argument("--wait-gpu", type=float, default=0, help="ждать освобождения GPU до N минут")
     a = ap.parse_args()
 
+    import os
+
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     import torch
     from torch import nn
 
+    from ml import gpu
     from ml.m1_encoder.model import EmbeddingOnly, VydelEncoder
 
     torch.manual_seed(a.seed)
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    choice, info = gpu.choose(a.device, need_mb=a.gpu_mem_mb, wait_min=a.wait_gpu)
+    dev = "cuda" if choice == "GPU" and torch.cuda.is_available() else "cpu"
+    if dev == "cpu":
+        torch.set_num_threads(max(1, (os.cpu_count() or 2) - 1))
+    print(f"[m1] устройство: {dev} {info}", flush=True)
     t0 = time.time()
     X, vocab, is_val, _ = make_arrays(a.limit, a.seed)
     n = len(is_val)

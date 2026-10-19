@@ -40,7 +40,8 @@ chmod +x scripts/*.sh                 # если git не сохранил пр�
 ./scripts/train.sh start m1 synth m3                       # только эти шаги, по порядку
 M1_DMODEL=384 M1_LAYERS=8 M1_EPOCHS=60 ./scripts/train.sh start m1
 SYNTH_N=8000 SYNTH_WORKERS=24 ./scripts/train.sh start synth m3
-M2_DEVICE=CPU ./scripts/train.sh start m2                  # если CatBoost не видит GPU
+M2_DEVICE=CPU ./scripts/train.sh start m2                  # принудительно на CPU
+GPU_WAIT_MIN=120 ./scripts/train.sh start                  # общий GPU занят — ждать до 2 ч, пока освободится память
 NETWORK_FILE="Выделы под лесосеками.geojson" ./scripts/train.sh start synth m3
 ./scripts/train.sh run m2                                  # на переднем плане, без фона
 ```
@@ -93,7 +94,11 @@ python3 -m pytest -q                                   # 10 тестов на о
 python3 -m forestmerge run --sample --out out/sample
 ```
 
-Свободной видеопамяти 20 ГБ хватает на всё; модели обучаются по очереди, не одновременно.
+Модели обучаются по очереди. Нужно видеопамяти: M2 ≈ 4 ГБ (`M2_GPU_MB`), M1 ≈ 3–6 ГБ (`M1_GPU_MB`).
+Перед каждым GPU-шагом скрипт смотрит **фактически свободную** память (`nvidia-smi`): если её мало
+(GPU общий и занят другими), шаг идёт на CPU, либо ждёт освобождения до `GPU_WAIT_MIN` минут.
+M2 на CPU — 5–15 мин, M1 на CPU — 20–60 мин; результат тот же. Если M2/M1 всё же упали, обучение
+продолжается со следующего шага (они необязательные), итог — `status: done_with_errors (...)`.
 Если GPU делят с другими процессами — ограничьте: `CUDA_VISIBLE_DEVICES=0`.
 
 ---
@@ -117,7 +122,7 @@ python3 -m ml.prepare_data
 ## 2. M2 — восстановление пропусков (CatBoost на GPU)
 
 ```bash
-python3 -m ml.m2_impute.train --device GPU --iterations 5000 --depth 8
+python3 -m ml.m2_impute.train --device auto --iterations 5000 --depth 8 --gpu-mem-mb 4096
 ```
 
 * Цели: высота, диаметр, возраст породы (`--targets height diameter age`).
@@ -284,8 +289,10 @@ models/
 
 | Симптом | Причина / решение |
 |---|---|
-| `CatBoostError: ... GPU` | нет CUDA-сборки CatBoost или драйвера → `--device CPU` (медленнее в 5–10 раз, но работает) |
-| `CUDA out of memory` в M1 | `--batch 256` или `--d-model 256` |
+| `CUDA error 2: out of memory` (CatBoost) | CatBoost по умолчанию резервирует 95 % **всей** видеопамяти. Исправлено: резерв не больше `--gpu-mem-mb` и свободного − 1 ГБ; при падении `train.sh` повторяет M2 на CPU. Посмотреть, кто занял GPU: `nvidia-smi` |
+| `CatBoostError: ... GPU` | нет CUDA-сборки CatBoost или драйвера → `M2_DEVICE=CPU` (медленнее, но работает) |
+| `CUDA out of memory` в M1 | `M1_BATCH=256` или `M1_DMODEL=256`; либо `GPU_WAIT_MIN=60` — дождаться свободной памяти |
+| `status`: «не запущено», но статус «running …» | старый запуск/зависший процесс: `./scripts/train.sh stop` (добивает и процессы `ml.*`), затем `start` |
 | M1 `sp_acc` ≈ 0 | мало эпох/данных (`--limit`), увеличьте `--epochs` |
 | генератор: много `ошибок` | битые сочетания геометрии (пропускаются); если > 5 % — пришлите `summary-*.json` |
 | ранжировщик: `нет данных` | сначала `python3 -m ml.synth.generate` |
