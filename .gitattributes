@@ -1,0 +1,6 @@
+# данные задачи храним байт-в-байт (CSV в cp1251), без конвертации переводов строк
+*.csv -text
+*.geojson -text
+*.xlsx binary
+*.qgz binary
+*.zip binary

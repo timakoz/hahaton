@@ -1,0 +1,28 @@
+services:
+  api:
+    build: .
+    ports: ["8765:8765"]
+    environment:
+      FM_DATA_DIR: /data            # здесь ищутся папки образца 5_1/5_2/5_3 и CSV ТО
+      FM_MODELS_DIR: /app/models
+      FM_PROJECTS_DIR: /app/state/projects
+      FM_DB: /app/state/app.db
+      # FM_LLM_URL: http://llm:8000/v1   # раскомментировать вместе с сервисом llm
+      # FM_LLM_MODEL: explainer
+    volumes:
+      - ./:/data:ro                 # корень репозитория с исходными файлами задачи
+      - ./models:/app/models
+      - ./data/state:/app/state
+    restart: unless-stopped
+
+  # Локальная LLM для обоснований (опционально, нужен GPU и nvidia-container-toolkit)
+  # llm:
+  #   image: vllm/vllm-openai:latest
+  #   command: >
+  #     --model Qwen/Qwen2.5-7B-Instruct-AWQ --quantization awq --max-model-len 4096
+  #     --gpu-memory-utilization 0.6 --served-model-name explainer
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices: [{driver: nvidia, count: 1, capabilities: [gpu]}]
+  #   volumes: [ "~/.cache/huggingface:/root/.cache/huggingface" ]

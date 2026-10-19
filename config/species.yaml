@@ -1,0 +1,508 @@
+_note: 'Сгенерировано scripts/build_species.py. Сокращения восстановлены по формулам состава. age_class_years: п.233 ЛИ-2022.
+  maturity_age: типовой возраст рубки (нижняя граница спелых) в эксплуатационных лесах; регион и хозсекция могут менять его,
+  правьте здесь.'
+age_groups:
+  young_classes: 2
+  mature_classes:
+    conifer: 2
+    hard: 2
+    soft: 2
+    shrub: 1
+species:
+  '302600':
+    name: Береза
+    abbr: Б
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 36902
+  '100100':
+    name: Сосна
+    abbr: С
+    group: conifer
+    age_class_years: 20
+    maturity_age: 81
+    rows_in_data: 31219
+  '100200':
+    name: Ель
+    abbr: Е
+    group: conifer
+    age_class_years: 20
+    maturity_age: 81
+    rows_in_data: 24712
+  '304000':
+    name: Осина
+    abbr: ОС
+    group: soft
+    age_class_years: 10
+    maturity_age: 41
+    rows_in_data: 22299
+  '100300':
+    name: Пихта
+    abbr: П
+    group: conifer
+    age_class_years: 20
+    maturity_age: 81
+    rows_in_data: 5095
+  '100400':
+    name: Лиственница
+    abbr: Л
+    group: conifer
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 4659
+  '304200':
+    name: Липа
+    abbr: ЛИП
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 4072
+  '100500':
+    name: Кедр
+    abbr: К
+    group: conifer
+    age_class_years: 40
+    maturity_age: 161
+    rows_in_data: 3582
+  '304101':
+    name: Ольха серая (белая)
+    abbr: ОЛС
+    group: soft
+    age_class_years: 10
+    maturity_age: 41
+    rows_in_data: 2734
+  '304110':
+    name: Ольха черная (клейкая)
+    abbr: ОЛЧ
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 1503
+  '304400':
+    name: Ива древовидная
+    abbr: ИВДР
+    group: soft
+    age_class_years: 10
+    maturity_age: 31
+    rows_in_data: 900
+  '202400':
+    name: Клен
+    abbr: КЛ
+    group: hard
+    age_class_years: 20
+    maturity_age: 61
+    rows_in_data: 865
+  '201082':
+    name: Дуб низкоствольный
+    abbr: ДН
+    group: hard
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 700
+  '201081':
+    name: Дуб высокоствольный
+    abbr: ДВ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 680
+  '202500':
+    name: Вяз (ильм)
+    abbr: В
+    group: hard
+    age_class_years: 20
+    maturity_age: 81
+    rows_in_data: 555
+  '302624':
+    name: Береза белая
+    abbr: ББЕЛ
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 487
+  '202300':
+    name: Ясень
+    abbr: Я
+    group: hard
+    age_class_years: 20
+    maturity_age: 81
+    rows_in_data: 391
+  '999004':
+    name: Береза аллеганская (желтая)
+    abbr: БЖ
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 370
+  '304260':
+    name: Липа медоносная
+    abbr: ЛИПМ
+    group: soft
+    age_class_years: 20
+    maturity_age: 61
+    rows_in_data: 314
+  '100435':
+    name: Лиственница приморская
+    abbr: ЛП
+    group: conifer
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 272
+  '202605':
+    name: Береза каменная (Эрмана)
+    abbr: БК
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 242
+  '202000':
+    name: Дуб
+    abbr: Д
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 208
+  '100150':
+    name: Сосна обыкновенная
+    abbr: СО
+    group: conifer
+    age_class_years: 20
+    maturity_age: 81
+    rows_in_data: 171
+  '202430':
+    name: Клен остролистный
+    abbr: КЛО
+    group: hard
+    age_class_years: 20
+    maturity_age: 61
+    rows_in_data: 157
+  '304100':
+    name: Ольха
+    abbr: ОЛ
+    group: soft
+    age_class_years: 10
+    maturity_age: 41
+    rows_in_data: 141
+  '202325':
+    name: Ясень обыкновенный (высокий)
+    abbr: ЯО
+    group: hard
+    age_class_years: 20
+    maturity_age: 81
+    rows_in_data: 129
+  '202205':
+    name: Граб кавказский
+    abbr: ГК
+    group: hard
+    age_class_years: 20
+    maturity_age: 61
+    rows_in_data: 129
+  '304300':
+    name: Тополь
+    abbr: Т
+    group: soft
+    age_class_years: 10
+    maturity_age: 31
+    rows_in_data: 110
+  '804300':
+    name: Ива (тальники)
+    abbr: ИВ
+    group: shrub
+    age_class_years: 5
+    maturity_age: 11
+    rows_in_data: 94
+  '202080':
+    name: Дуб черешчатый (летний, обыкновенный)
+    abbr: ДЧ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 80
+  '511315':
+    name: Орех маньчжурский
+    abbr: ОРМ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 79
+  '302620':
+    name: Береза бородавчатая (повислая)
+    abbr: ББ
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 75
+  '202085':
+    name: Дуб нагорный
+    abbr: ДНАГ
+    group: hard
+    age_class_years: 20
+    maturity_age: 61
+    rows_in_data: 67
+  '511800':
+    name: Рябина
+    abbr: Р
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 61
+  '202603':
+    name: Береза даурская (черная дальневосточная)
+    abbr: БДА
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 61
+  '202105':
+    name: Бук восточный
+    abbr: БКВ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 53
+  '202433':
+    name: Клен полевой
+    abbr: КЛП
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 43
+  '304105':
+    name: Ольха белая (серая)
+    abbr: ОЛСА
+    group: soft
+    age_class_years: 10
+    maturity_age: 41
+    rows_in_data: 37
+  '202545':
+    name: Вяз (ильм) сродный (японский, ильм долинный)
+    abbr: ИЛД
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 30
+  '509000':
+    name: Груша
+    abbr: ГШ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 27
+  '802694':
+    name: Береза кустарниковая
+    abbr: БКС
+    group: shrub
+    age_class_years: 5
+    maturity_age: 11
+    rows_in_data: 23
+  '804323':
+    name: Ива джунгарская
+    abbr: ИВД
+    group: shrub
+    age_class_years: 5
+    maturity_age: 11
+    rows_in_data: 22
+  '202060':
+    name: Дуб курчавый
+    abbr: ДКУ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 22
+  '202805':
+    name: Акация белая (робиния)
+    abbr: АБ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 20
+  '821010':
+    name: Карагана древовидная (акация желтая)
+    abbr: АЖ
+    group: shrub
+    age_class_years: 5
+    maturity_age: 11
+    rows_in_data: 19
+  '202450':
+    name: Клен ясенелистный
+    abbr: КЛХ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 18
+  '202015':
+    name: Дуб Гартвиса (армянский)
+    abbr: ДГ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 18
+  '202505':
+    name: Вяз (ильм) гладкий (обыкновенный)
+    abbr: ВГЛ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 16
+  '202608':
+    name: Береза ребристая (желтая дальневосточная)
+    abbr: БЕР
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 16
+  '202550':
+    name: Вяз (ильм) шершавый (ильм горный)
+    abbr: ИЛГ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 13
+  '100320':
+    name: Пихта кавказская (Нордманна)
+    abbr: ПК
+    group: conifer
+    age_class_years: 40
+    maturity_age: 121
+    rows_in_data: 12
+  '304345':
+    name: Тополь черный (Осокорь)
+    abbr: ТЧ
+    group: soft
+    age_class_years: 10
+    maturity_age: 31
+    rows_in_data: 10
+  '202099':
+    name: Дуб скальный низкоствольный
+    abbr: ДСН
+    group: hard
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 10
+  '202315':
+    name: Ясень маньчжурский
+    abbr: ЯМ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 10
+  '202310':
+    name: Ясень зеленый (ланцетный)
+    abbr: ЯЗ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 9
+  '202100':
+    name: Бук
+    abbr: БУК
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 9
+  '202449':
+    name: Клен ложноплатановый (белый, явор)
+    abbr: ЯВ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 9
+  '512830':
+    name: Черемуха Маака
+    abbr: ЧРМ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 9
+  '202098':
+    name: Дуб скальный высокоствольный
+    abbr: ДСВ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 9
+  '804330':
+    name: Ива козья
+    abbr: ИВК
+    group: shrub
+    age_class_years: 5
+    maturity_age: 11
+    rows_in_data: 8
+  '202530':
+    name: Вяз (ильм) мелколистный
+    abbr: ВМ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 7
+  '304344':
+    name: Тополь гибридный
+    abbr: ТГИБ
+    group: soft
+    age_class_years: 10
+    maturity_age: 21
+    rows_in_data: 7
+  '304220':
+    name: Липа крупнолистная
+    abbr: ЛПК
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 5
+  '302663':
+    name: Береза плосколистная
+    abbr: БПЛ
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 5
+  '304500':
+    name: Чозения
+    abbr: ЧЗ
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 5
+  '202090':
+    name: Дуб пойменный
+    abbr: ДПОЙ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 4
+  '202540':
+    name: Вяз (ильм) пробковый
+    abbr: ВЯЗ
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 4
+  '100140':
+    name: Сосна крымская (Палласа)
+    abbr: СКК
+    group: conifer
+    age_class_years: 20
+    maturity_age: 81
+    rows_in_data: 4
+  '804335':
+    name: Ива остролистная
+    abbr: ИВА
+    group: shrub
+    age_class_years: 5
+    maturity_age: 11
+    rows_in_data: 3
+  '508605':
+    name: Бархат амурский
+    abbr: БАР
+    group: hard
+    age_class_years: 20
+    maturity_age: 101
+    rows_in_data: 3
+  '304305':
+    name: Тополь белый (серебристый)
+    abbr: ТБ
+    group: soft
+    age_class_years: 10
+    maturity_age: 61
+    rows_in_data: 3

@@ -1,0 +1,149 @@
+# Профиль норм: Лесоустроительная инструкция (Приказ Минприроды России № 510 от 05.08.2022).
+# Все значения можно переопределить из UI или через params в API (deep-merge поверх этого файла).
+# Номера пунктов даны по тексту в редакции КонсультантПлюс от 12.10.2022. В п.218 есть
+# перекрёстные ссылки на «п.195» и «п.214»: по смыслу это таблицы, которые в этой редакции
+# стоят в п.196 и п.215.
+
+profile: "ЛИ-2022 (Приказ Минприроды № 510 от 05.08.2022)"
+
+# Разряд таксации лесов. Если null, выбирается автоматически по средней площади выдела.
+rank: 2
+# п.196, столбец «Средняя площадь лесотаксационного выдела, га». Используется для автоподбора разряда.
+avg_area_by_rank:
+  1: [3, 6]
+  2: [7, 15]
+  3: [16, null]
+
+# Минимальная площадь лесотаксационного выдела, га.
+# I и II разряд взяты из п.196 ЛИ-2022. Строки III в ЛИ-2022 нет, значения взяты из ЛИ-2018 (п.30).
+# Их нужно сверить или задать на первом лесоустроительном совещании (п.197).
+min_area_ha:
+  1: {natural: 1.0, contrast: 1.0, unstocked: 0.1, agri: 0.1, nonforest: 0.1}
+  2: {natural: 3.0, contrast: 3.0, unstocked: 0.5, agri: 0.1, nonforest: 0.1}
+  3: {natural: 5.0, contrast: 3.0, unstocked: 2.0, agri: 0.6, nonforest: 4.0}
+
+# Допустимые случайные ошибки (п.215; на них ссылается п.218 при объединении).
+# Расхождения запаса на 1 га, коэффициента состава преобладающей породы и полноты между
+# основным и объединённым выделом не должны выходить за эти пределы.
+tolerances:
+  method: "глазомерный"            # способ таксации: ключ из таблицы ниже
+  table:
+    "глазомерно-измерительный": {stock_pct: 15, height_pct: 8,  coef_units: 1.0, diameter_pct: 10, undergrowth_pct: 25, density_abs: 0.1}
+    "глазомерный":              {stock_pct: 20, height_pct: 10, coef_units: 1.5, diameter_pct: 12, undergrowth_pct: 30, density_abs: 0.1}
+    "дзз-аналитико-измерительный": {stock_pct: 25, height_pct: 15, coef_units: 1.5, diameter_pct: 20, undergrowth_pct: 40, density_abs: 0.2}
+    "дзз-автоматизированный":   {stock_pct: 30, height_pct: 15, coef_units: 2.0, diameter_pct: 20, undergrowth_pct: 40, density_abs: 0.2}
+    "актуализация":             {stock_pct: 30, height_pct: 15, coef_units: 2.0, diameter_pct: 20, undergrowth_pct: 40, density_abs: 0.2}
+  # Для малых значений п.215 задаёт абсолютные допуски.
+  small_values:
+    stock_below_m3: 70
+    stock_abs_m3: 10
+    height_below_m: 15
+    height_abs_m: 1
+    diameter_below_cm: 20
+    diameter_abs_cm: 2
+
+# Признаки обособления выделов (п.233–241). Это знаменатели при нормировке таксационной дистанции:
+# разница ровно на порог даёт вклад 1.0.
+separation:
+  composition_units: 2      # п.236: коэффициенты состава различаются на 2 единицы и более
+  density: 0.2              # п.241а: полнота основного яруса
+  bonitet_classes: 1        # п.241б
+  diameter_cm: 4            # п.241в
+  age_classes: 1            # п.238: больше продолжительности класса возраста
+  dominant_species: 1       # разная преобладающая порода
+  age_group: 1              # разные группы возраста (п.238)
+  tlu: 1                    # разный тип лесорастительных условий
+  forest_type: 0.5          # разный тип леса
+  origin: 1                 # культуры и естественные насаждения (п.228)
+
+# Веса признаков таксационной дистанции. 0 отключает признак.
+similarity_weights:
+  composition: 1.0
+  dominant_species: 1.0
+  age: 1.0
+  age_group: 0.5
+  density: 0.7
+  bonitet: 0.7
+  diameter: 0.5
+  tlu: 0.7
+  forest_type: 0.3
+  origin: 0.8
+  stock: 0.7
+  land: 1.5                 # разные категории земель (насаждение / вырубка / нелесные)
+
+# Функция стоимости выбора соседа: чем меньше, тем лучше.
+# cost = similarity·d + border·(1 − доля общей границы) + violation·нарушения_допусков
+#        + compactness·ухудшение_компактности − same_parent_bonus·[тот же исходный выдел]
+#        + largest_neighbor·(1 − площадь_кандидата / площадь_крупнейшего_соседа)
+cost_weights:
+  similarity: 1.0
+  border: 0.6
+  violation: 2.5
+  compactness: 0.3
+  same_parent_bonus: 0.6
+  largest_neighbor: 0.3      # п.218 разрешает присоединять «к наиболее крупному из примыкающих»
+  fallback: 1.0              # штраф за вариант из ослабленной матрицы совместимости
+
+# Режим оценки кандидатов: rules — только правила; ml — ранжировщик M3;
+# hybrid — сумма cost правил и (−score) модели с весом ml_weight.
+scoring: rules
+ml_weight: 1.0
+
+# Технологические осколки: ошибки совмещения контура лесосеки (GPS) с сетью.
+# Таксацию для них не сравниваем, кусок прилипает к соседу с самой длинной общей границей.
+tech_slivers:
+  max_area_ha: 0.05         # всё, что меньше, считается шумом
+  min_width_m: 12           # кусок уже этой ширины (buffer(−w/2) пуст) тоже считается шумом
+  thin_max_area_ha: 0.5     # ...но только если его площадь не больше этой
+  prefer_same_parent: true  # сначала соседи из того же исходного выдела (это и есть правка контура лесосеки)
+
+rules:
+  keep_preexisting_small: true        # не трогать выделы меньше минимума, которые были такими до рубки
+  allow_violation_if_no_alternative: true   # если все соседи нарушают допуски, сливать с лучшим и ставить флаг «проверить»
+  allow_multipart: false              # false: каждый новый контур становится отдельным выделом
+  # Матрица совместимости «класс фрагмента → классы, к которым можно присоединять».
+  compat:
+    stand: [stand]
+    open: [open]
+    nonforest: [nonforest]
+    linear: []
+    unknown: []
+  # Если у фрагмента нет совместимых соседей, можно ослабить матрицу (fallback).
+  compat_fallback:
+    open: [stand]
+    stand: [open]
+    unknown: [stand, open]
+  # Не объединять выделы с разными ОЗУ и т.п. Поле в данных отсутствует, это задел на будущее.
+  hard_equal_fields: []
+
+# Методы пересчёта характеристик объединённого выдела (п.5 задачи).
+recalc:
+  land_type: inherit_main        # inherit_main | mode_by_area
+  forest_type: inherit_main
+  tlu: inherit_main
+  bonitet: mode_by_area          # inherit_main | mode_by_area
+  composition: by_stock          # by_stock | by_area
+  tree_params: weighted_by_stock # возраст/H/D пород: weighted_by_stock | weighted_by_area | inherit_main
+  density: weighted_by_area
+  age_group: recompute_if_changed  # recompute | inherit_main | recompute_if_changed
+  undergrowth: weighted_by_area
+  plant_year: weighted_by_area
+  use_imputed: false             # подставлять значения M2 в выходное ТО (иначе только для сравнения)
+  numbering: keep_largest        # keep_largest | new_after_max
+  formula:
+    plus_below: 0.05             # доля < 5 % пишется как «+»
+    single_below: 0.02           # доля < 2 % пишется как «ед.»
+
+# Мероприятия (рубки)
+cut:
+  default_form: "Сплошная рубка"     # если нет файла объёмов
+  clearcut_forms: ["Сплошная рубка", "сплошная"]
+  clearcut_land_kind: "Вырубка"      # «Вырубка» после рубки; «Лесосека», если рубка ещё не завершена
+  keep_undergrowth_on_clearcut: true
+  split_cut_by_tlu: true             # делить выдел-вырубку по ТЛУ, если каждая часть ≥ минимума
+  selective_density_scaling: proportional   # полнота после выборочной рубки ∝ остаточному запасу
+  resolve_overlaps: first_wins       # перекрытия лесосек: first_wins (по порядку номеров)
+
+output:
+  null_token: ""                    # в образце «[NULL]»; пусто удобнее для Excel
+  year: null                        # год рубки для журнала; null — текущий

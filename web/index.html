@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ForestMerge — объединение выделов</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2 5 12h4l-4 6h6v4h2v-4h6l-4-6h4z"/></svg>
+    <span>ForestMerge</span>
+    <small>объединение фрагментированных лесотаксационных выделов</small>
+  </div>
+  <div class="hdr-actions">
+    <select id="projectSelect" title="Проект"></select>
+    <button id="btnSample" class="ghost">Открыть образец</button>
+    <button id="btnUpload" class="ghost">Загрузить данные…</button>
+    <span class="sep"></span>
+    <button data-export="xlsx" class="ghost" title="ТО в формате образца + журнал решений">XLSX</button>
+    <button data-export="geojson" class="ghost">GeoJSON</button>
+    <button data-export="json" class="ghost">JSON</button>
+  </div>
+</header>
+
+<main>
+  <aside id="left">
+    <section class="card" id="metricsCard">
+      <h3>Итог</h3>
+      <div id="metrics" class="metrics"><p class="muted">Откройте образец или загрузите данные.</p></div>
+      <div id="warnings"></div>
+    </section>
+
+    <section class="card">
+      <h3>Параметры <span class="muted small">(ЛИ-2022, настраиваемые)</span></h3>
+      <form id="params" autocomplete="off">
+        <label>Разряд таксации
+          <select name="rank"><option value="">авто по средней площади</option><option>1</option><option>2</option><option>3</option></select>
+        </label>
+        <label>Способ таксации (допуски п.215)
+          <select name="method"></select>
+        </label>
+        <fieldset>
+          <legend>Мин. площадь выдела, га (п.196) для выбранного разряда</legend>
+          <div class="grid2" id="minAreas"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Технологические осколки</legend>
+          <div class="grid2">
+            <label>площадь до, га<input name="tech_area" type="number" step="0.01" min="0"></label>
+            <label>ширина до, м<input name="tech_width" type="number" step="1" min="0"></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Выбор соседа</legend>
+          <div class="grid2">
+            <label>сходство<input name="w_similarity" type="number" step="0.1"></label>
+            <label>общая граница<input name="w_border" type="number" step="0.1"></label>
+            <label>нарушение допуска<input name="w_violation" type="number" step="0.1"></label>
+            <label>тот же выдел<input name="w_same_parent_bonus" type="number" step="0.1"></label>
+            <label>крупнейший сосед<input name="w_largest_neighbor" type="number" step="0.1"></label>
+            <label>оценка
+              <select name="scoring"><option value="rules">правила</option><option value="hybrid">правила + ML</option><option value="ml">ML-ранжировщик</option></select>
+            </label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Пересчёт и мероприятия</legend>
+          <div class="grid2">
+            <label>бонитет
+              <select name="bonitet"><option value="mode_by_area">мода по площади</option><option value="inherit_main">от основного</option></select>
+            </label>
+            <label>нумерация
+              <select name="numbering"><option value="keep_largest">номер у крупнейшей части</option><option value="new_after_max">все новые после max</option></select>
+            </label>
+            <label>рубка без файла объёмов
+              <select name="default_form"><option>Сплошная рубка</option><option>Выборочная рубка</option></select>
+            </label>
+            <label>вид земель после сплошной
+              <select name="clearcut_kind"><option>Вырубка</option><option>Лесосека</option></select>
+            </label>
+          </div>
+          <label class="chk"><input type="checkbox" name="allow_violation"> сливать с лучшим соседом, даже если допуски нарушены (с отметкой «проверить»)</label>
+          <label class="chk"><input type="checkbox" name="keep_preexisting"> не трогать выделы, бывшие меньше минимума до рубки</label>
+          <label class="chk"><input type="checkbox" name="use_models"> подключить обученные модели (models/)</label>
+        </fieldset>
+        <div class="row">
+          <button type="submit" class="primary" id="btnRun">Рассчитать</button>
+          <button type="button" class="ghost" id="btnResetOv" title="Сбросить ручные решения">Сбросить правки</button>
+        </div>
+      </form>
+    </section>
+  </aside>
+
+  <div id="mapWrap">
+    <div id="map"></div>
+    <div class="map-ctl" id="layerCtl">
+      <div class="seg">
+        <button data-view="before">До</button><button data-view="fragments" class="on">Фрагменты</button><button data-view="after">После</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="tglLs" checked> лесосеки</label>
+      <label class="chk"><input type="checkbox" id="tglLabels" checked> номера</label>
+      <label class="chk"><input type="checkbox" id="tglSat"> спутник</label>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div id="busy" hidden><div class="spinner"></div><span>расчёт…</span></div>
+  </div>
+
+  <aside id="right">
+    <nav class="tabs">
+      <button data-tab="card" class="on">Карточка</button>
+      <button data-tab="journal">Журнал</button>
+      <button data-tab="table">ТО</button>
+    </nav>
+    <div class="tab" id="tab-card"><p class="muted pad">Кликните фрагмент или выдел на карте.</p></div>
+    <div class="tab" id="tab-journal" hidden>
+      <div class="filters">
+        <select id="jFilter">
+          <option value="all">все решения</option>
+          <option value="merge">объединения</option>
+          <option value="review">требуют проверки</option>
+          <option value="fallback">ослабленное правило</option>
+          <option value="keep">оставлены</option>
+          <option value="tech">техосколки</option>
+          <option value="user">ручные</option>
+        </select>
+      </div>
+      <div id="journal"></div>
+    </div>
+    <div class="tab" id="tab-table" hidden><div id="toTable"></div></div>
+  </aside>
+</main>
+
+<dialog id="dlgUpload">
+  <form method="dialog" id="uploadForm">
+    <h3>Загрузка данных квартала</h3>
+    <label>Название<input name="name" value="Проект"></label>
+    <label>Выдельная сеть (GeoJSON, поле label_name) *<input type="file" name="network" accept=".geojson,.json" required></label>
+    <label>Контуры мероприятий — лесосеки (GeoJSON) *<input type="file" name="lesoseki" accept=".geojson,.json" required></label>
+    <label>Таксационное описание (XLSX как «Пример материалов ТО»)<input type="file" name="taxation" accept=".xlsx"></label>
+    <details><summary>…или ТО тремя CSV (cp1251, «;»)</summary>
+      <label>выдел<input type="file" name="vydel_csv" accept=".csv"></label>
+      <label>ярус<input type="file" name="yarus_csv" accept=".csv"></label>
+      <label>подрост<input type="file" name="podrost_csv" accept=".csv"></label>
+    </details>
+    <label>Объём заготовленной древесины (CSV как образец 5_3)<input type="file" name="volumes" accept=".csv"></label>
+    <div class="row end">
+      <button value="cancel" class="ghost">Отмена</button>
+      <button id="btnUploadGo" class="primary" value="ok">Загрузить</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

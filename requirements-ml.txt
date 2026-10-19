@@ -1,0 +1,7 @@
+# Обучение M1/M2/M3 на сервере с GPU (RTX 4090). Сначала: pip install -r requirements.txt
+# PyTorch с CUDA ставится отдельно под вашу версию драйвера, например CUDA 12.4:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124
+torch>=2.3
+onnx>=1.16
+onnxscript>=0.1
+tqdm>=4.66
