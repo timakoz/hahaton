@@ -12,7 +12,7 @@ PORT="${PORT:-8765}"
 HOST="${HOST:-127.0.0.1}"
 PID_FILE="$LOG_DIR/app.pid"
 LOG="$LOG_DIR/app.log"
-is_running() { [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; }
+is_running() { [[ -f "$PID_FILE" ]] && ps -p "$(cat "$PID_FILE")" -o pid= >/dev/null 2>&1; }
 
 case "${1:-}" in
   start)

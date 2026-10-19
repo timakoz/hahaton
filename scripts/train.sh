@@ -88,7 +88,9 @@ run_all() {
   fi
 }
 
-is_running() { [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; }
+# ps, а не kill -0: kill -0 не видит процессы другого пользователя (например, запущенные через sudo)
+is_running() { [[ -f "$PID_FILE" ]] && ps -p "$(cat "$PID_FILE")" -o pid= >/dev/null 2>&1; }
+owner_of() { ps -o user= -p "$1" 2>/dev/null | tr -d ' '; }
 ml_procs() { pgrep -af "$ML_PATTERN" 2>/dev/null | grep -v pgrep || true; }
 
 case "${1:-}" in
@@ -125,7 +127,7 @@ case "${1:-}" in
     tail -n 200 -F "$L"
     ;;
   status)
-    if is_running; then echo "ИДЁТ (PID $(cat "$PID_FILE"))"; else echo "фоновый процесс не запущен"; fi
+    if is_running; then echo "ИДЁТ (PID $(cat "$PID_FILE"), пользователь $(owner_of "$(cat "$PID_FILE")"))"; else echo "фоновый процесс не запущен"; fi
     [[ -f "$STATUS_FILE" ]] && echo "статус: $(cat "$STATUS_FILE")"
     P="$(ml_procs)"; [[ -n "$P" ]] && { echo "процессы обучения:"; echo "$P"; }
     L="$(latest_log || true)"
@@ -138,6 +140,10 @@ case "${1:-}" in
   stop)
     if is_running; then
       PID=$(cat "$PID_FILE")
+      OWNER=$(owner_of "$PID")
+      if [[ "$OWNER" != "$ME" && "$(id -u)" != "0" ]]; then
+        echo "Обучение запущено пользователем $OWNER — остановить можно так: sudo ./scripts/train.sh stop"; exit 1
+      fi
       PGID=$(ps -o pgid= -p "$PID" | tr -d ' ')
       kill -TERM -- "-$PGID" 2>/dev/null || kill -TERM "$PID" 2>/dev/null || true
     fi

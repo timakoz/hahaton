@@ -17,6 +17,16 @@ fi
 export PY ROOT
 export PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
 LOG_DIR="$ROOT/logs"
-mkdir -p "$LOG_DIR"
+ME="$(id -un)"
+if [[ "$(id -u)" == "0" && -n "${SUDO_USER:-}" ]]; then
+  echo "Внимание: запуск через sudo — новые файлы будут принадлежать root, и потом без sudo не запишутся." >&2
+  echo "Лучше один раз:  sudo chown -R $SUDO_USER: $ROOT   и запускать без sudo." >&2
+fi
+mkdir -p "$LOG_DIR" 2>/dev/null || true
+if [[ ! -w "$LOG_DIR" ]] || { [[ -e "$LOG_DIR/train_latest.txt" ]] && [[ ! -w "$LOG_DIR/train_latest.txt" ]]; }; then
+  echo "Нет прав на запись в $LOG_DIR (файлы создавались через sudo?)." >&2
+  echo "Исправить:  sudo chown -R $ME: $ROOT" >&2
+  exit 1
+fi
 # setsid (util-linux) отвязывает процесс от терминала; если его нет — хватает nohup
 SETSID="$(command -v setsid || true)"
