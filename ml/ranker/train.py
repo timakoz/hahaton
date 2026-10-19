@@ -13,6 +13,7 @@ import argparse
 import glob
 import json
 import sqlite3
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -72,6 +73,7 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
     import lightgbm as lgb
+    warnings.filterwarnings("ignore", message=".*eval_set.*deprecated.*")
 
     parts = sorted(glob.glob(str(Path(a.synth) / "*.parquet")))
     if not parts:

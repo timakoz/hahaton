@@ -83,15 +83,20 @@ def main() -> None:
 
     import os
 
+    from ml import gpu
+
+    # Устройство выбираем ДО импорта torch (по nvidia-smi). Если выбран CPU, прячем GPU совсем:
+    # иначе оптимизатор новых версий torch всё равно трогает CUDA-контекст и падает, когда карта занята.
+    choice, info = gpu.choose(a.device, need_mb=a.gpu_mem_mb, wait_min=a.wait_gpu)
+    if choice == "CPU":
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     import torch
     from torch import nn
 
-    from ml import gpu
     from ml.m1_encoder.model import EmbeddingOnly, VydelEncoder
 
     torch.manual_seed(a.seed)
-    choice, info = gpu.choose(a.device, need_mb=a.gpu_mem_mb, wait_min=a.wait_gpu)
     dev = "cuda" if choice == "GPU" and torch.cuda.is_available() else "cpu"
     if dev == "cpu":
         torch.set_num_threads(max(1, (os.cpu_count() or 2) - 1))

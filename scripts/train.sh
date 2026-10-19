@@ -14,6 +14,7 @@
 #   M2_DEVICE (auto)  M2_ITERS (5000)  M2_GPU_MB (4096)
 #   M1_DEVICE (auto)  M1_EPOCHS (40)   M1_BATCH (512)  M1_DMODEL (256)  M1_LAYERS (6)  M1_GPU_MB (6000)
 #   SYNTH_N (4000)    SYNTH_WORKERS (ядра − 1)  NETWORK_FILE (реальная сеть ФГИС, если есть)
+#   SYNTH_KEEP (0)    — 1: не удалять прежние сценарии перед генерацией
 #   FEEDBACK_DB (data/app.db)
 # Пример:  GPU_WAIT_MIN=120 M1_DMODEL=384 M1_LAYERS=8 ./scripts/train.sh start
 set -euo pipefail
@@ -47,7 +48,9 @@ run_step() {
     m1)      "$PY" -m ml.m1_encoder.train --device "${M1_DEVICE:-auto}" --epochs "${M1_EPOCHS:-40}" \
                      --batch "${M1_BATCH:-512}" --d-model "${M1_DMODEL:-256}" --layers "${M1_LAYERS:-6}" \
                      --gpu-mem-mb "${M1_GPU_MB:-6000}" --wait-gpu "${GPU_WAIT_MIN:-0}" ;;
-    synth)   "$PY" -m ml.synth.generate --n "${SYNTH_N:-4000}" --workers "${SYNTH_WORKERS:-$(nproc_1)}" \
+    synth)   # старые сценарии удаляем (иначе смешаются признаки до/после обучения M1); SYNTH_KEEP=1 — оставить
+             [[ "${SYNTH_KEEP:-0}" == "1" ]] || rm -f data/synth/part-*.parquet data/synth/summary-*.json
+             "$PY" -m ml.synth.generate --n "${SYNTH_N:-4000}" --workers "${SYNTH_WORKERS:-$(nproc_1)}" \
                      --out data/synth ${NETWORK_FILE:+--network-file "$NETWORK_FILE"} ;;
     m3)      "$PY" -m ml.ranker.train --synth data/synth --feedback "${FEEDBACK_DB:-data/app.db}" ;;
     test)    "$PY" -m pytest -q ;;
