@@ -12,3 +12,4 @@ models/
 *.zip
 *.qgz~
 catboost_info/
+logs/

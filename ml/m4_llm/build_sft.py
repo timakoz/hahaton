@@ -1,6 +1,6 @@
 """M4 (опционально): датасет для LoRA-дообучения LLM-«пояснителя».
 
-    python -m ml.m4_llm.build_sft --scenarios 300 --out data/sft/train.jsonl [--rewrite-url http://host:8001/v1]
+    python3 -m ml.m4_llm.build_sft --scenarios 300 --out data/sft/train.jsonl [--rewrite-url http://host:8001/v1]
 
 Вход модели — факты решения (JSON), выход — текст обоснования для пояснительной записки.
 Целевые тексты: шаблон explain.template (базово) либо его перефразировка более крупной моделью

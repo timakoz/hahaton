@@ -1,6 +1,6 @@
 """Бэктест на реальных сетях ФГИС ЛК (раздел 2.1–2.2 PLAN.md).
 
-    python -m ml.backtest.run --network "Выделы под лесосеками.geojson" --lesoseki "Лесосеки-2.geojson" \
+    python3 -m ml.backtest.run --network "Выделы под лесосеками.geojson" --lesoseki "Лесосеки-2.geojson" \
                               [--lesoseki "Лесосеки-1.geojson"] [--max-quarters 300] --out out/backtest
 
 1) Базовая линия ФГИС: доля выделов < 0.1 / 0.5 / 1 га и многоконтурных среди выделов, пересекающих

@@ -1,7 +1,7 @@
 """M1: самообучение энкодера выделов (masked modeling) на всей выгрузке ТО. Рассчитан на RTX 4090.
 
-    python -m ml.m1_encoder.train --epochs 40 --batch 512 --d-model 384 --layers 8     # ~14M параметров
-    python -m ml.m1_encoder.train --epochs 1 --limit 3000 --out out/smoke_models/encoder # быстрая проверка
+    python3 -m ml.m1_encoder.train --epochs 40 --batch 512 --d-model 384 --layers 8     # ~14M параметров
+    python3 -m ml.m1_encoder.train --epochs 1 --limit 3000 --out out/smoke_models/encoder # быстрая проверка
 
 Маскируем 25 % известных числовых значений (H, D, возраст, запас, полнота…), 15 % пород и 20 % общих
 признаков, учим восстанавливать. Эмбеддинг [CLS] (128-d, L2-норма) используется решателем как признак

@@ -1,5 +1,5 @@
-"""CLI: python -m forestmerge run --sample --out out/sample
-        python -m forestmerge run --network сеть.geojson --taxation ТО.xlsx --lesoseki лс.geojson [--volumes v.csv]
+"""CLI: python3 -m forestmerge run --sample --out out/sample
+        python3 -m forestmerge run --network сеть.geojson --taxation ТО.xlsx --lesoseki лс.geojson [--volumes v.csv]
 """
 from __future__ import annotations
 

@@ -18,7 +18,7 @@ from forestmerge.stand import Stand  # noqa: E402
 
 def load_processed(d: Path = PROCESSED_DIR) -> dict[str, pd.DataFrame]:
     if not (d / "general.parquet").exists():
-        sys.exit(f"Нет {d / 'general.parquet'} — сначала: python -m ml.prepare_data")
+        sys.exit(f"Нет {d / 'general.parquet'} — сначала: python3 -m ml.prepare_data")
     g = pd.read_parquet(d / "general.parquet")
     g.index = g[S.VID].values
     g.index.name = "vid"

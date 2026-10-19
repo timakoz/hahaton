@@ -1,7 +1,7 @@
 """M4 (опционально): QLoRA-дообучение 7–8B модели на RTX 4090 (≈ 14–18 ГБ VRAM).
 
     pip install -r requirements-llm.txt
-    python -m ml.m4_llm.train_qlora --model Qwen/Qwen2.5-7B-Instruct --data data/sft/train.jsonl \
+    python3 -m ml.m4_llm.train_qlora --model Qwen/Qwen2.5-7B-Instruct --data data/sft/train.jsonl \
                                     --out models/llm/qwen7b-explainer --epochs 2
 
 После обучения адаптер подключается к vLLM:

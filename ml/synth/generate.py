@@ -11,8 +11,8 @@
 Метка — учитель из solver (_make_teacher): для каждого фрагмента перебираем кандидатов, жадно доигрываем
 квартал и сравниваем итоговую цель. Ранжировщик учится повторять этот перебор за один проход.
 
-    python -m ml.synth.generate --n 3000 --workers 16 --out data/synth
-    python -m ml.synth.generate --n 20 --workers 1 --out out/smoke_synth     # проверка
+    python3 -m ml.synth.generate --n 3000 --workers 16 --out data/synth
+    python3 -m ml.synth.generate --n 20 --workers 1 --out out/smoke_synth     # проверка
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ warnings.filterwarnings("ignore")
 from ml.common import ROOT, load_processed, quarter_taxation  # noqa: E402
 from forestmerge import schema as S  # noqa: E402
 from forestmerge.config import load_norms  # noqa: E402
-from forestmerge.settings import PROCESSED_DIR, find_geo_extra  # noqa: E402
+from forestmerge.settings import MODELS_DIR, PROCESSED_DIR, find_geo_extra  # noqa: E402
 from forestmerge.solver import run  # noqa: E402
 
 CRS_LOCAL = "EPSG:32637"
@@ -140,7 +140,14 @@ def make_lesoseki(cells: list[Polygon], stands_q: pd.DataFrame, shapes: list[Pol
 
 
 # --------------------------------------------------------------------------- сценарий
-def _init(proc_dir: str, network_file: str | None, shape_paths: list[str]):
+def _init(proc_dir: str, network_file: str | None, shape_paths: list[str], use_models: bool = False):
+    _G["models"] = None
+    if use_models:
+        # те же признаки, что в приложении с галкой «модели»: восстановленные H/D/возраст (M2) и emb_cos (M1)
+        from forestmerge.ml_hooks import Models
+        m = Models(MODELS_DIR)
+        m.ranker = None                     # ранжировщик при генерации меток не нужен
+        _G["models"] = m if (m.encoder is not None or m.imputers) else None
     _G["data"] = load_processed(Path(proc_dir))
     st = pd.read_parquet(Path(proc_dir) / "stands.parquet")
     _G["stands"] = st.set_index("vid")
@@ -218,7 +225,7 @@ def scenario(seed: int) -> list[dict]:
                                                 p=[0.6, 0.25, 0.15]))},
     }
     try:
-        res = run(net, tax, lsg, volumes, params=params, teacher=True)
+        res = run(net, tax, lsg, volumes, params=params, teacher=True, models=_G.get("models"))
     except Exception as e:  # noqa: BLE001  — битые сочетания геометрии пропускаем
         return [{"_error": repr(e)[:200], "seed": seed}]
     out = []
@@ -240,6 +247,8 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--chunk", type=int, default=200)
     ap.add_argument("--network-file", default=None, help="реальная сеть (Выделы под лесосеками.geojson)")
+    ap.add_argument("--no-models", action="store_true",
+                    help="не использовать M1/M2 из models/ даже если они обучены")
     a = ap.parse_args()
     extra = find_geo_extra()
     shape_paths = [str(p) for p in (extra["lesoseki1"], extra["lesoseki2"]) if p]
@@ -248,7 +257,10 @@ def main() -> None:
     seeds = list(range(a.seed * 1_000_000, a.seed * 1_000_000 + a.n))
     t0 = time.time()
     n_rows = n_err = 0
-    init_args = (str(PROCESSED_DIR), a.network_file, shape_paths)
+    use_models = not a.no_models and ((MODELS_DIR / "encoder" / "encoder.onnx").exists()
+                                      or (MODELS_DIR / "impute" / "meta.json").exists())
+    print(f"модели M1/M2 в признаках: {'да' if use_models else 'нет'}", flush=True)
+    init_args = (str(PROCESSED_DIR), a.network_file, shape_paths, use_models)
     if a.workers > 1:
         pool = mp.Pool(a.workers, initializer=_init, initargs=init_args)
         it = pool.imap_unordered(scenario, seeds, chunksize=4)

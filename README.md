@@ -18,7 +18,21 @@ python -m venv .venv
 .venv\Scripts\python -m uvicorn api.main:app --port 8765       # → http://localhost:8765
 ```
 В браузере: «Открыть образец» → карта с фрагментами → клик по фрагменту → карточка решения.
-Linux/macOS — то же с `.venv/bin/python`. Docker: `docker compose up --build`.
+Docker: `docker compose up --build`.
+
+## Linux-сервер (обучение в фоне)
+
+```bash
+cd /opt/hahaton && git pull
+chmod +x scripts/*.sh
+./scripts/setup_server.sh          # один раз: .venv + зависимости + проверка GPU (без окружения: USE_VENV=0)
+./scripts/train.sh run test        # тесты на образце
+./scripts/train.sh start           # обучение в фоне — консоль можно закрыть
+./scripts/train.sh status          # / log / stop
+./scripts/app.sh start             # приложение на 127.0.0.1:8765 (с ноутбука: ssh -L 8765:localhost:8765 user@server)
+```
+Скрипты сами выбирают `.venv/bin/python`, а без окружения — `python3`. Подробности и параметры —
+[docs/TRAINING.md](docs/TRAINING.md).
 
 Результат на образце (кв. 29:28:7:105, 38 выделов, 10 лесосек, II разряд, 0,7 с на CPU):
 

@@ -1,6 +1,6 @@
 """M2: восстановление пропусков в ТО (высота, диаметр, возраст породы) — CatBoost, на GPU при наличии.
 
-    python -m ml.m2_impute.train [--device GPU] [--iterations 3000] [--targets height diameter age]
+    python3 -m ml.m2_impute.train [--device GPU] [--iterations 3000] [--targets height diameter age]
 
 Валидация — по кварталам (GroupShuffleSplit), чтобы не было утечки соседних выделов.
 Базлайн — медиана по (порода, бонитет, ярус). Выход: models/impute/<target>.cbm + meta.json + metrics.json

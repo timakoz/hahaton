@@ -1,6 +1,6 @@
 """Шаг 0. Большие CSV ТО → очищенные parquet + таблица признаков выделов.
 
-    python -m ml.prepare_data [--vydel CSV --yarus CSV --podrost CSV] [--out data/processed]
+    python3 -m ml.prepare_data [--vydel CSV --yarus CSV --podrost CSV] [--out data/processed]
 
 Выход:
   general.parquet / layers.parquet / undergrowth.parquet — колонки как в образце, ключ = рег. номер выдела

@@ -1,6 +1,6 @@
 """M3: ранжировщик соседей для объединения (LightGBM LambdaRank).
 
-    python -m ml.ranker.train --synth data/synth [--feedback data/app.db --feedback-weight 20]
+    python3 -m ml.ranker.train --synth data/synth [--feedback data/app.db --feedback-weight 20]
 
 Данные: строки «фрагмент × кандидат» из генератора синтетики (метка — учитель-перебор) и правки
 специалистов из веб-приложения (метка — выбор специалиста, вес выше). Валидация — по сценариям.
@@ -75,7 +75,7 @@ def main() -> None:
 
     parts = sorted(glob.glob(str(Path(a.synth) / "*.parquet")))
     if not parts:
-        raise SystemExit(f"нет данных в {a.synth}: сначала python -m ml.synth.generate")
+        raise SystemExit(f"нет данных в {a.synth}: сначала python3 -m ml.synth.generate")
     df = pd.concat([pd.read_parquet(p) for p in parts], ignore_index=True)
     df["source"] = "synth"
     fb = load_feedback(Path(a.feedback), a.feedback_weight)

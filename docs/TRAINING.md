@@ -11,32 +11,86 @@
 | **M4** LLM-пояснитель (опц.) | переписывает обоснование для пояснительной записки | шаблоны решателя / правки | 30–90 мин QLoRA | `models/llm/` |
 
 Порядок: **подготовка данных → M2 → M1 → синтетика → M3 → (M4)**. M2 и M1 независимы;
-M3 использует `emb_cos` от M1, если энкодер уже лежит в `models/encoder` к моменту генерации.
+синтетика использует M1 и M2, если они уже лежат в `models/` (те же признаки, что в приложении).
 
 ---
 
-## 0. Окружение
+## Быстрый путь: установка и обучение в фоне
 
 ```bash
-# Linux-сервер, Python 3.11, драйвер NVIDIA ≥ 550
-git clone <repo> hahaton && cd hahaton          # или скопировать папку целиком
-python3.11 -m venv .venv && source .venv/bin/activate
-pip install -U pip
-pip install -r requirements.txt
-pip install torch --index-url https://download.pytorch.org/whl/cu124   # под вашу CUDA
-pip install -r requirements-ml.txt
-python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+cd /opt/hahaton
+chmod +x scripts/*.sh                 # если git не сохранил права на запуск
+./scripts/setup_server.sh             # один раз: окружение .venv + зависимости + проверка GPU
+./scripts/train.sh run test           # 10 тестов на образце — ядро работает
+./scripts/train.sh start              # ВСЁ обучение в фоне: prepare → m2 → m1 → synth → m3
 ```
 
-Положите исходные файлы задачи в корень проекта (как сейчас) **или** в `data/raw/` —
-поиск идёт в обоих местах. Нужны три CSV ТО (`Таксационные описания … (выдел|ярус|подрост)_зпт.csv`),
-`Лесосеки-1.geojson`, по возможности `Лесосеки-2.geojson` и `Выделы под лесосеками.geojson`.
+После `start` консоль можно закрыть: процесс отвязан от SSH (`setsid` + `nohup`), лог пишется в
+`logs/train_<дата>.log`. Вернувшись:
+
+```bash
+./scripts/train.sh status             # идёт ли, на каком шаге, загрузка GPU
+./scripts/train.sh log                # смотреть лог вживую (Ctrl+C — выйти из просмотра, обучение идёт дальше)
+./scripts/train.sh stop               # остановить
+```
+
+Отдельные шаги и параметры:
+
+```bash
+./scripts/train.sh start m1 synth m3                       # только эти шаги, по порядку
+M1_DMODEL=384 M1_LAYERS=8 M1_EPOCHS=60 ./scripts/train.sh start m1
+SYNTH_N=8000 SYNTH_WORKERS=24 ./scripts/train.sh start synth m3
+M2_DEVICE=CPU ./scripts/train.sh start m2                  # если CatBoost не видит GPU
+NETWORK_FILE="Выделы под лесосеками.geojson" ./scripts/train.sh start synth m3
+./scripts/train.sh run m2                                  # на переднем плане, без фона
+```
+
+Веб-приложение на сервере (тоже в фоне), открыть с ноутбука через SSH-туннель:
+
+```bash
+./scripts/app.sh start                # http://127.0.0.1:8765 на сервере
+ssh -L 8765:localhost:8765 mblp@<сервер>       # на своём компьютере → http://localhost:8765
+./scripts/app.sh stop
+```
+
+Альтернатива скриптам — `tmux new -s train`, внутри обычные команды, `Ctrl+B D` — отсоединиться,
+`tmux attach -t train` — вернуться.
+
+---
+
+## 0. Окружение (что делает setup_server.sh)
+
+На сервере команды `python` может не быть — только `python3`. Скрипты сами берут
+`.venv/bin/python`, а если окружения нет — `python3`. В ручных командах ниже везде `python3`:
+внутри активированного окружения (`source .venv/bin/activate`) это тоже Python окружения.
+
+С окружением (рекомендуется):
+
+```bash
+sudo apt install python3-venv          # если python3 -m venv ругается на ensurepip
+python3 -m venv .venv
+source .venv/bin/activate              # в этой консоли python3/pip — из окружения
+python3 -m pip install -U pip
+python3 -m pip install -r requirements.txt
+python3 -m pip install torch           # на Linux колёса PyPI уже с CUDA 12.x
+python3 -m pip install -r requirements-ml.txt
+python3 -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+```
+
+Без окружения (опционально): `USE_VENV=0 ./scripts/setup_server.sh` — ставит в `~/.local`
+(`pip install --user`; на Ubuntu 23.04+ добавляется `--break-system-packages`). Нужен Python ≥ 3.10;
+другой интерпретатор: `PYTHON_BIN=python3.11 ./scripts/setup_server.sh`. Своя сборка torch:
+`TORCH_INDEX=https://download.pytorch.org/whl/cu124 ./scripts/setup_server.sh`.
+
+Исходные файлы задачи уже лежат в репозитории (корень проекта); можно также класть их в `data/raw/`.
+Для бэктеста и реальной геометрии в синтетике нужны ещё `Лесосеки-2.geojson` и
+`Выделы под лесосеками.geojson`.
 
 Проверка, что ядро работает:
 
 ```bash
-pytest -q                                   # 10 тестов на образце 5_x
-python -m forestmerge run --sample --out out/sample
+python3 -m pytest -q                                   # 10 тестов на образце 5_x
+python3 -m forestmerge run --sample --out out/sample
 ```
 
 Свободной видеопамяти 20 ГБ хватает на всё; модели обучаются по очереди, не одновременно.
@@ -47,7 +101,7 @@ python -m forestmerge run --sample --out out/sample
 ## 1. Подготовка данных (CPU, ~2 мин)
 
 ```bash
-python -m ml.prepare_data
+python3 -m ml.prepare_data
 ```
 
 Выход в `data/processed/`:
@@ -63,7 +117,7 @@ python -m ml.prepare_data
 ## 2. M2 — восстановление пропусков (CatBoost на GPU)
 
 ```bash
-python -m ml.m2_impute.train --device GPU --iterations 5000 --depth 8
+python3 -m ml.m2_impute.train --device GPU --iterations 5000 --depth 8
 ```
 
 * Цели: высота, диаметр, возраст породы (`--targets height diameter age`).
@@ -83,7 +137,7 @@ python -m ml.m2_impute.train --device GPU --iterations 5000 --depth 8
 Метрики сохраняются в `models/impute/metrics.json` — это готовый слайд для защиты.
 
 Подключение: решатель сам подхватит `models/impute/*` при запуске с моделями
-(`python -m forestmerge run --sample --models`, в UI — галка «подключить обученные модели»).
+(`python3 -m forestmerge run --sample --models`, в UI — галка «подключить обученные модели»).
 По умолчанию восстановленные значения используются **только для сравнения выделов**; чтобы
 подставлять их в выходное ТО, задайте `recalc.use_imputed: true` в `config/norms_2022.yaml`.
 
@@ -93,9 +147,9 @@ python -m ml.m2_impute.train --device GPU --iterations 5000 --depth 8
 
 ```bash
 # базовый (~5M параметров), 5–7 мин на 4090
-python -m ml.m1_encoder.train --epochs 40 --batch 512
+python3 -m ml.m1_encoder.train --epochs 40 --batch 512
 # крупнее (~14M), как в плане
-python -m ml.m1_encoder.train --epochs 60 --batch 512 --d-model 384 --layers 8 --lr 2e-4
+python3 -m ml.m1_encoder.train --epochs 60 --batch 512 --d-model 384 --layers 8 --lr 2e-4
 ```
 
 * Вход: выдел = до 12 токенов «порода × ярус» (код породы, ярус, преобладающая ли, доля, возраст, H, D,
@@ -110,16 +164,16 @@ python -m ml.m1_encoder.train --epochs 60 --batch 512 --d-model 384 --layers 8 -
 Признак успеха: `sp_acc` > 0.6 и `num_mse` заметно падает к 10-й эпохе. Если на валидации переобучение
 (val растёт) — уменьшите `--epochs` или `--d-model`.
 
-Отладка без GPU: `python -m ml.m1_encoder.train --epochs 1 --limit 3000 --d-model 64 --layers 2 --out out/smoke`.
+Отладка без GPU: `python3 -m ml.m1_encoder.train --epochs 1 --limit 3000 --d-model 64 --layers 2 --out out/smoke`.
 
 ---
 
 ## 4. Синтетика для M3 (CPU, параллельно)
 
 ```bash
-python -m ml.synth.generate --n 4000 --workers 16 --out data/synth
+python3 -m ml.synth.generate --n 4000 --workers 16 --out data/synth
 # если есть реальная сеть ФГИС — геометрия будет реальной в 70 % сценариев:
-python -m ml.synth.generate --n 4000 --workers 16 --network-file "Выделы под лесосеками.geojson" --seed 2
+python3 -m ml.synth.generate --n 4000 --workers 16 --network-file "Выделы под лесосеками.geojson" --seed 2
 ```
 
 Каждый сценарий:
@@ -141,7 +195,7 @@ python -m ml.synth.generate --n 4000 --workers 16 --network-file "Выделы �
 ## 5. M3 — ранжировщик соседей (LightGBM LambdaRank)
 
 ```bash
-python -m ml.ranker.train --synth data/synth --feedback data/app.db --feedback-weight 20
+python3 -m ml.ranker.train --synth data/synth --feedback data/app.db --feedback-weight 20
 ```
 
 * Группа = один фрагмент, строки = кандидаты-соседи, ~70 признаков (`forestmerge/features.py`):
@@ -164,7 +218,7 @@ python -m ml.ranker.train --synth data/synth --feedback data/app.db --feedback-w
 Цикл дообучения на правках:
 ```bash
 # специалисты работают в приложении → накопились правки
-python -m ml.ranker.train --synth data/synth --feedback data/app.db
+python3 -m ml.ranker.train --synth data/synth --feedback data/app.db
 curl -X POST http://localhost:8765/api/models/reload     # подхватить новую модель без перезапуска
 ```
 
@@ -176,7 +230,7 @@ curl -X POST http://localhost:8765/api/models/reload     # подхватить 
 будут дополнены текстом «для пояснительной записки»:
 
 ```bash
-pip install vllm
+python3 -m pip install vllm
 vllm serve Qwen/Qwen2.5-7B-Instruct-AWQ --quantization awq --max-model-len 4096 \
      --gpu-memory-utilization 0.6 --served-model-name explainer --port 8001       # ~6–8 ГБ VRAM
 export FM_LLM_URL=http://localhost:8001/v1 FM_LLM_MODEL=explainer
@@ -186,10 +240,10 @@ export FM_LLM_URL=http://localhost:8001/v1 FM_LLM_MODEL=explainer
 
 С дообучением (QLoRA, ~14–18 ГБ):
 ```bash
-pip install -r requirements-llm.txt
-python -m ml.m4_llm.build_sft --scenarios 1000 --out data/sft/train.jsonl \
+python3 -m pip install -r requirements-llm.txt
+python3 -m ml.m4_llm.build_sft --scenarios 1000 --out data/sft/train.jsonl \
        [--rewrite-url http://<большая-модель>/v1]      # перефразировка целей для разнообразия стиля
-python -m ml.m4_llm.train_qlora --model Qwen/Qwen2.5-7B-Instruct --data data/sft/train.jsonl \
+python3 -m ml.m4_llm.train_qlora --model Qwen/Qwen2.5-7B-Instruct --data data/sft/train.jsonl \
        --out models/llm/qwen7b-explainer --epochs 2
 vllm serve Qwen/Qwen2.5-7B-Instruct --enable-lora --lora-modules explainer=models/llm/qwen7b-explainer \
      --max-model-len 4096 --gpu-memory-utilization 0.85 --port 8001
@@ -204,7 +258,7 @@ vllm serve Qwen/Qwen2.5-7B-Instruct --enable-lora --lora-modules explainer=model
 Когда будут файлы `Выделы под лесосеками.geojson` и `Лесосеки-2.geojson`:
 
 ```bash
-python -m ml.backtest.run --network "Выделы под лесосеками.geojson" \
+python3 -m ml.backtest.run --network "Выделы под лесосеками.geojson" \
        --lesoseki "Лесосеки-2.geojson" --lesoseki "Лесосеки-1.geojson" --max-quarters 300
 ```
 Выход `out/backtest/report.json`: базовая линия ФГИС (доля выделов < 0.1/0.5/1 га и многоконтурных
@@ -234,5 +288,5 @@ models/
 | `CUDA out of memory` в M1 | `--batch 256` или `--d-model 256` |
 | M1 `sp_acc` ≈ 0 | мало эпох/данных (`--limit`), увеличьте `--epochs` |
 | генератор: много `ошибок` | битые сочетания геометрии (пропускаются); если > 5 % — пришлите `summary-*.json` |
-| ранжировщик: `нет данных` | сначала `python -m ml.synth.generate` |
+| ранжировщик: `нет данных` | сначала `python3 -m ml.synth.generate` |
 | модели «не видны» в UI | путь `FM_MODELS_DIR`, затем `POST /api/models/reload`; статус в ответе `/api/config` |
