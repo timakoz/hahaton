@@ -1,0 +1,20 @@
+# systemd-сервис веб-приложения ForestMerge (автозапуск после перезагрузки, перезапуск при падении).
+# Установка (подставит вашего пользователя и папку проекта):
+#   sed "s#__USER__#$USER#g; s#__DIR__#$PWD#g" deploy/forestmerge.service | sudo tee /etc/systemd/system/forestmerge.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now forestmerge
+#   systemctl status forestmerge ; journalctl -u forestmerge -f
+[Unit]
+Description=ForestMerge web app
+After=network.target
+
+[Service]
+User=__USER__
+WorkingDirectory=__DIR__
+Environment=PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
+# 127.0.0.1 — доступ только через SSH-туннель или nginx; 0.0.0.0 — открыть порт наружу (авторизации нет!)
+ExecStart=__DIR__/.venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 8765
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

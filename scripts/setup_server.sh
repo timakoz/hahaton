@@ -5,12 +5,14 @@
 #   USE_VENV=0 ./scripts/setup_server.sh      # без окружения, в пользовательский site-packages
 #   PYTHON_BIN=python3.11 ./scripts/setup_server.sh
 #   TORCH_INDEX=https://download.pytorch.org/whl/cu124 ./scripts/setup_server.sh   # своя сборка torch
+#   APP_ONLY=1 ./scripts/setup_server.sh      # сервер только для приложения: без torch и GPU (~0,5 ГБ вместо ~6)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 USE_VENV="${USE_VENV:-1}"
+APP_ONLY="${APP_ONLY:-0}"
 
 command -v "$PYTHON_BIN" >/dev/null || { echo "Нет $PYTHON_BIN. Установите: sudo apt install python3 python3-venv python3-pip"; exit 1; }
 "$PYTHON_BIN" - <<'EOF' || exit 1
@@ -44,6 +46,15 @@ fi
 
 "$PY" -m pip install -U pip wheel "${PIP_FLAGS[@]}"
 "$PY" -m pip install -r requirements.txt "${PIP_FLAGS[@]}"
+
+if [[ "$APP_ONLY" == "1" ]]; then
+  # приложению нужны только onnxruntime/catboost/lightgbm из requirements.txt — torch не нужен
+  "$PY" -c "import geopandas, fastapi, onnxruntime, catboost, lightgbm; print('зависимости приложения: ok')"
+  echo
+  echo "Готово (только приложение). Проверка:  ./scripts/train.sh run test"
+  echo "Запуск:                                 ./scripts/app.sh start"
+  exit 0
+fi
 
 if command -v nvidia-smi >/dev/null; then
   nvidia-smi --query-gpu=name,memory.total,memory.used,driver_version --format=csv,noheader || true
