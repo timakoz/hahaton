@@ -26,6 +26,13 @@ case "${1:-}" in
   import)
     IN="${2:?укажите архив: ./scripts/state.sh import файл.tgz}"
     command -v sha256sum >/dev/null && sha256sum "$IN"
+    # data/app.db (правки специалистов, пользователи, сессии) из архива заменит текущую — сохраняем копию
+    if [[ -f data/app.db ]] && tar tzf "$IN" | grep -qx "data/app.db"; then
+      BAK="data/app.db.bak-$(date +%Y%m%d_%H%M%S)"
+      cp data/app.db "$BAK"
+      echo "Внимание: data/app.db будет заменена из архива. Прежняя копия: $BAK"
+      echo "Пользователей, созданных на этом сервере до импорта, создайте заново (./scripts/users.sh add …)"
+    fi
     tar xzf "$IN" -C "$ROOT"
     echo "Распаковано в $ROOT:"
     ls -la models/*/ 2>/dev/null | grep -E "\.(cbm|onnx|txt|json)$" || true

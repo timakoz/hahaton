@@ -13,18 +13,29 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-DOMAIN="" EMAIL="" SELF=0
+DOMAIN="" EMAIL="" SELF=0 SKIP_CHECK=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --domain) DOMAIN="$2"; shift 2 ;;
     --email) EMAIL="$2"; shift 2 ;;
     --self-signed) SELF=1; shift ;;
+    --skip-check) SKIP_CHECK=1; shift ;;
     *) sed -n '2,13p' "$0"; exit 1 ;;
   esac
 done
 [[ "$(id -u)" == "0" ]] || { echo "Запустите через sudo"; exit 1; }
 [[ -n "$DOMAIN" ]] || { echo "Укажите --domain (имя сайта или IP для --self-signed)"; exit 1; }
 if [[ "$SELF" == "0" && -z "$EMAIL" ]]; then echo "Для Let's Encrypt укажите --email (уведомления об истечении)"; exit 1; fi
+
+# Let's Encrypt откажет, если домен не указывает на этот сервер — проверяем заранее, с объяснением
+if [[ "$SELF" == "0" && "$SKIP_CHECK" == "0" ]]; then
+  if ! bash "$ROOT/scripts/check_domain.sh" "$DOMAIN"; then
+    echo
+    echo "Сертификат не запрашиваю: домен ещё не готов (см. [СТОП] выше)."
+    echo "Если уверены, что всё верно (например, особая схема сети), добавьте --skip-check"
+    exit 1
+  fi
+fi
 
 if command -v apt-get >/dev/null; then
   apt-get update -qq
