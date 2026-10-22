@@ -240,37 +240,78 @@ sudo iptables -t nat -S 2>/dev/null | grep DNAT ; sudo nft list ruleset 2>/dev/n
 | ничего, только DNAT в iptables/nft | роутер просто пересылает порты на одну VM — сайты раздаёт та VM, ищите там |
 | pfSense / OPNsense (веб-панель) | Services → HAProxy (или nginx), Firewall → NAT |
 
-**2. VM для приложения.** Возьмите существующую подходящую (например, `106 (app)`) или новую
-(`101 (ubuntu-26.04)`), подключённую к той же внутренней сети, что и роутер. Узнайте её адрес: `ip -4 addr`
-(это `APP_VM_IP`), и адрес роутера во внутренней сети: `ip route | grep default` (это `ROUTER_IP`).
-Дальше на ней — шаги 4–7 основной инструкции (код, модели, пользователи).
-На Ubuntu 26.04 Python может быть слишком новым для части колёс (catboost, onnxruntime); если
-`setup_server.sh` упадёт на установке — `sudo apt install python3.12 python3.12-venv` и
-`PYTHON_BIN=python3.12 APP_ONLY=1 ./scripts/setup_server.sh`.
+**У нас (проверено):** роутер — nginx 1.24, сайты — файлы в `/etc/nginx/sites-enabled/`, у каждого свой
+сертификат от `certbot --nginx`; VM во внутренней сети `10.1.3.0/24`, роутер в ней — `10.1.3.100`
+(например, `webui.softrush.ru → 10.1.3.106:8080`). Новая VM `101 (ubuntu-26.04)` получила `10.1.3.102`.
 
-**3. Сервис приложения слушает внутреннюю сеть и доверяет только роутеру** (вместо шага 8):
+**2. Подключение к VM по SSH — через роутер (jump host).** Снаружи доступен только роутер `212.69.86.212`,
+к VM ходим «через него»:
+* **Xshell:** скопируйте рабочую сессию (ПКМ → Копировать → Вставить), в «Соединение» поменяйте только
+  «Хост» на `10.1.3.102`. Jump host хранится в разделе «Соединение → Прокси» (не в «SSH → Пробросы», поэтому
+  там пусто) — копия его унаследует. Старый способ с правилом проброса в сессии роутера тоже работает, но не нужен.
+* **Обычный ssh (Windows 10+/Linux/macOS)** — одной командой: `ssh -J mblp@212.69.86.212 mblp@10.1.3.102`.
+  Удобнее — файл `~/.ssh/config` (на Windows `C:\Users\<вы>\.ssh\config`):
+  ```
+  Host router
+      HostName 212.69.86.212
+      User mblp
+  Host hakaton-vm
+      HostName 10.1.3.102
+      User mblp
+      ProxyJump router
+  ```
+  Тогда `ssh hakaton-vm` и копирование архива `scp forestmerge_state.tgz hakaton-vm:/tmp/`.
+
+**Как узнать IP виртуалки в Proxmox:** VM → *Summary* → поле *IPs* — показывается, только если в VM работает
+QEMU Guest Agent (VM → *Options* → *QEMU Guest Agent* = Enabled, внутри VM:
+`sudo apt install -y qemu-guest-agent && sudo systemctl enable --now qemu-guest-agent`, затем перезагрузка VM).
+Без агента: VM → *Console* → войти → `ip -4 addr`. Или на роутере: `ip neigh` и сравнить MAC с VM → *Hardware* →
+*Network Device*.
+
+**3. Подготовка VM (клон из шаблона)** — на `10.1.3.102`:
+```bash
+sudo hostnamectl set-hostname hakaton           # сейчас имя «template» — у всех клонов будет одинаковое
+cat /etc/netplan/*.yaml | grep -E 'dhcp4|addresses'   # dhcp4: true — адрес раздаёт DHCP; addresses — статический
+sudo apt update && sudo apt -y upgrade && sudo reboot  # «System restart required»
+```
+Проверьте, что `10.1.3.102` не занят ещё кем-то (в вашей схеме номер VM часто = последней цифре IP, а
+VM 102 — это mail): на роутере `ip neigh show 10.1.3.102` должен показывать MAC именно VM 101
+(Proxmox → 101 → Hardware → Network Device). Если адрес статический и скопирован из шаблона — поменяйте его
+в `/etc/netplan/*.yaml` на свободный (например, `10.1.3.101/24`) и `sudo netplan apply`.
+
+Python: `python3 --version`. На 26.04 он может оказаться слишком новым для колёс catboost/onnxruntime; если
+`setup_server.sh` упадёт на их установке — поставьте Python 3.12 через uv и укажите его:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh && ~/.local/bin/uv python install 3.12
+PYTHON_BIN="$(~/.local/bin/uv python find 3.12)" APP_ONLY=1 ./scripts/setup_server.sh
+```
+Дальше — шаги 4–7 основной инструкции (модели, код, пользователи).
+
+**4. Сервис приложения слушает внутреннюю сеть и доверяет только роутеру** (вместо шага 8), на VM:
 ```bash
 cd /opt/hahaton
-ROUTER_IP=10.0.0.1          # ← подставьте свой
+ROUTER_IP=10.1.3.100
 sed "s#__USER__#$USER#g; s#__DIR__#$PWD#g; s#FM_HOST=127.0.0.1#FM_HOST=0.0.0.0#; s#FM_FWD=127.0.0.1#FM_FWD=$ROUTER_IP#; s#FM_COOKIE_SECURE=auto#FM_COOKIE_SECURE=1#" \
     deploy/forestmerge.service | sudo tee /etc/systemd/system/forestmerge.service
 sudo systemctl daemon-reload && sudo systemctl enable --now forestmerge
-# порт 8765 — только для роутера (если на VM включён ufw)
-sudo ufw allow from $ROUTER_IP to any port 8765 proto tcp
+sudo ufw status | grep -q active && sudo ufw allow from $ROUTER_IP to any port 8765 proto tcp
 ```
-Проверка с роутера: `curl -s http://APP_VM_IP:8765/api/health` → `{"ok":true,...}`.
+Проверка **с роутера**: `curl -s http://10.1.3.102:8765/api/health` → `{"ok":true,...}`.
 
-**4. Добавить сайт на роутере.** Для nginx — готовый блок [deploy/router-nginx-hakaton.conf](../deploy/router-nginx-hakaton.conf):
-лучше скопировать файл соседнего сайта (в нём уже верные пути к сертификату), поменять `server_name` на
-`hakaton.softrush.ru` и `proxy_pass` на `http://APP_VM_IP:8765`, проверить заголовки как в шаблоне, затем
-`sudo nginx -t && sudo systemctl reload nginx`. Сертификат: если у соседних сайтов общий `*.softrush.ru` —
-те же пути; иначе на роутере `sudo certbot certonly --webroot -w /var/www/certbot -d hakaton.softrush.ru`
-(или `sudo certbot --nginx -d hakaton.softrush.ru`, если там так уже делали).
-Для Nginx Proxy Manager: Proxy Hosts → Add → Domain `hakaton.softrush.ru`, Scheme `http`,
-Forward IP `APP_VM_IP`, Port `8765`; вкладка SSL → Request a new certificate (или существующий wildcard),
-Force SSL; Advanced → `client_max_body_size 200m;`.
+**5. Сайт на роутере** — как остальные сайты, через `certbot --nginx` (на роутере, `10.1.3.100`):
+```bash
+sudo nano /etc/nginx/sites-available/hakaton.softrush.ru     # вставить содержимое deploy/router-nginx-hakaton.conf
+sudo ln -s /etc/nginx/sites-available/hakaton.softrush.ru /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx                 # nginx -t должен сказать «syntax is ok / test is successful»
+sudo certbot --nginx -d hakaton.softrush.ru                  # выпустит сертификат и сам допишет HTTPS + редирект
+```
+Шаблон [deploy/router-nginx-hakaton.conf](../deploy/router-nginx-hakaton.conf) — только порт 80 и
+`proxy_pass http://10.1.3.102:8765`; certbot добавит `listen 443 ssl`, пути к сертификату и редирект
+(строки `# managed by Certbot`, как в `webui.conf`). Продление уже настроено на роутере для всех сайтов:
+`sudo certbot renew --dry-run`. Если `nginx -t` выдаёт ошибку — ничего не применяется, остальные сайты
+продолжают работать; удалите ссылку `sudo rm /etc/nginx/sites-enabled/hakaton.softrush.ru` и пришлите текст ошибки.
 
-Обязательно, чтобы прокси передавал `Host` (исходное имя сайта) и `X-Forwarded-Proto` — иначе вход
+Обязательно, чтобы прокси передавал `Host` и `X-Forwarded-Proto` (в шаблоне есть) — иначе вход
 будет отклонён как «запрос с чужого сайта». `X-Real-IP` нужен для защиты от перебора паролей.
 
 ---
