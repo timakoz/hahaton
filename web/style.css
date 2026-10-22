@@ -177,6 +177,10 @@ table.slots tr.group td { padding-top: 10px; font-size: 11px; color: var(--muted
 #dlgHelp { width: min(760px, 96vw); }
 .help-body { max-height: 72vh; overflow: auto; line-height: 1.5; font-size: 13px; padding-right: 6px; }
 .help-body h4 { margin: 14px 0 4px; }
+.li-note { margin: -2px 0 8px; line-height: 1.35; }
+.li-table { margin: 6px 0; font-size: 12px; }
+.li-table td:first-child { white-space: nowrap; font-weight: 600; }
+.pref { border-bottom: 1px dotted currentColor; cursor: help; }
 .help-body ul { padding-left: 18px; margin: 4px 0; }
 .help-body .formula { background: #f7f9f5; border-left: 3px solid var(--accent); padding: 6px 10px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 dialog .hint { font-size: 11px; color: var(--muted); font-style: italic; }

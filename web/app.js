@@ -46,6 +46,34 @@ const FLAG_RU = { needs_review: ["review", "проверить"], fallback: ["fa
 const TERM_RU = { composition: "состав", dominant_species: "порода", age: "возраст", age_group: "гр. возраста", density: "полнота",
   bonitet: "бонитет", diameter: "диаметр", tlu: "ТЛУ", forest_type: "тип леса", origin: "происхожд.", stock: "запас/га", land: "кат. земель" };
 
+// Пункты Лесоустроительной инструкции (Приказ Минприроды России от 05.08.2022 № 510) — для подсказок «п.NNN»
+const LI_DOC = "Лесоустроительная инструкция (Приказ Минприроды России от 05.08.2022 № 510)";
+const LI_PARA = {
+  "196": "Средняя и минимальная площадь лесотаксационного выдела по разрядам таксации",
+  "197": "Выделы меньше минимальной площади допускаются по решению первого лесоустроительного совещания",
+  "215": "Допустимые ошибки определения таксационных показателей по способам таксации (запас, коэффициент состава, полнота…)",
+  "217": "Лесотаксационный выдел — однородный участок с одними мероприятиями на всей площади",
+  "218": "Объединение: мелкий участок присоединяют к наиболее близкому по характеристике, ТЛУ или к наиболее крупному соседу; расхождения запаса, полноты и коэффициента состава — в пределах допусков п.215, мероприятие не меняется",
+  "220": "Лесные и нелесные земли лесного фонда",
+  "221": "Что относится к лесным землям, на которых расположены леса",
+  "227": "Признаки деления на выделы: происхождение, состав, возраст, полнота, ТЛУ, тип леса, бонитет, диаметр, высота",
+  "228": "Лесные культуры выделяются в отдельные выделы",
+  "233": "Классы возраста: 40 / 20 / 10 / 5 лет по группам пород",
+  "236": "Деление по составу: коэффициенты преобладающей породы различаются на 2 единицы и более",
+  "238": "Деление по возрасту: разные группы возраста или разница больше класса возраста",
+  "241": "Деление по полноте (на 0,2), бонитету (на 1 класс), диаметру (на 4 см), высоте",
+  "290": "Нумерация выделов — с северо-западного угла квартала к юго-восточному",
+};
+function paraTitle(text) {
+  const nums = [...String(text || "").matchAll(/п\.\s?(\d{3})/g)].map((m) => m[1]);
+  return [...new Set(nums)].map((n) => `п.${n}: ${LI_PARA[n] || "пункт инструкции"}`).join("\n") + (nums.length ? `\n— ${LI_DOC}` : "");
+}
+// экранировать текст и подсветить «п.NNN» с подсказкой
+function withParas(text) {
+  return esc(text).replace(/п\.\s?(\d{3})(–\d{3})?/g, (m, n) =>
+    `<span class="pref" title="${esc(`п.${n}: ${LI_PARA[n] || "пункт инструкции"}\n— ${LI_DOC}`)}">${m}</span>`);
+}
+
 // ---------------------------------------------------------------- карта
 // Карта не обязательна. Если библиотека не загрузилась или в браузере нет WebGL2 (удалённый рабочий стол,
 // виртуалка, отключённое аппаратное ускорение) — параметры, расчёт, журнал, ТО и экспорт работают без неё.
@@ -298,11 +326,11 @@ function renderDecision(d, el) {
       ${d.fragment_label ? `<div>Характеристика</div><div>${esc(d.fragment_label)}</div>` : ""}
       <div>Итог</div><div>${d.target_out_vid ? `присоединён к <a href="#" data-vid="${esc(d.target_out_vid)}">№ ${esc(d.target_out_vid)}</a>` : d.fragment_out_vid ? `выдел <a href="#" data-vid="${esc(d.fragment_out_vid)}">№ ${esc(d.fragment_out_vid)}</a>` : "—"}</div>
     </div>
-    <h4>Обоснование</h4><div class="expl">${esc(d.explanation)}</div>
+    <h4>Обоснование</h4><div class="expl">${withParas(d.explanation)}</div>
     ${d.explanation_llm ? `<h4>Текст для пояснительной записки (LLM)</h4><div class="expl llm">${esc(d.explanation_llm)}</div>` : ""}`;
   if (!isTech && ch && ch.checks && ch.checks.length) {
     html += `<h4>Допуски при объединении (п.218 → п.215)</h4><ul class="checks">${ch.checks.map((c) =>
-      `<li><span class="${c.ok ? "y" : "n"}">${c.ok ? "✓" : "✗"}</span>${esc(c.text)}<span class="p">${esc(c.para)}</span></li>`).join("")}</ul>`;
+      `<li><span class="${c.ok ? "y" : "n"}">${c.ok ? "✓" : "✗"}</span>${esc(c.text)}<span class="p pref" title="${esc(paraTitle(c.para))}">${esc(c.para)}</span></li>`).join("")}</ul>`;
   }
   if (!isTech && d.candidates && d.candidates.length) {
     const hasMl = d.candidates.some((c) => c.score_ml != null);
@@ -531,6 +559,11 @@ $("#btnSample").addEventListener("click", async () => {
 });
 $("#params").scoring.addEventListener("change", (e) => { if (e.target.value !== "rules") $("#params").use_models.checked = true; });
 $("#btnHelp").addEventListener("click", () => $("#dlgHelp").showModal());
+$("#lnkLi").addEventListener("click", (e) => {
+  e.preventDefault();
+  $("#dlgHelp").showModal();
+  $("#li-refs").scrollIntoView({ block: "start" });
+});
 $("#btnHelpClose").addEventListener("click", () => $("#dlgHelp").close());
 
 // ---------------------------------------------------------------- профили параметров
