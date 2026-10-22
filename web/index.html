@@ -137,9 +137,11 @@
       <div class="seg">
         <button data-view="before">До</button><button data-view="fragments" class="on">Фрагменты</button><button data-view="after">После</button>
       </div>
-      <label class="chk"><input type="checkbox" id="tglLs" checked> лесосеки</label>
-      <label class="chk"><input type="checkbox" id="tglLabels" checked> номера</label>
-      <label class="chk"><input type="checkbox" id="tglSat"> спутник</label>
+      <div class="toggles">
+        <label><input type="checkbox" id="tglLs" checked>лесосеки</label>
+        <label><input type="checkbox" id="tglLabels" checked>номера</label>
+        <label><input type="checkbox" id="tglSat">спутник</label>
+      </div>
       <div class="legend" id="legend"></div>
     </div>
     <div id="busy" hidden><div class="spinner"></div><span>расчёт…</span></div>

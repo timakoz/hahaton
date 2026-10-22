@@ -90,6 +90,9 @@ label.chk input { margin-top: 2px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-bottom: 6px; }
 .seg button { border: 0; border-radius: 0; padding: 4px 10px; }
 .seg button.on { background: var(--accent); color: #fff; }
+.toggles { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; }
+.toggles label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; cursor: pointer; }
+.toggles input { margin: 0; }
 .legend { margin-top: 6px; display: grid; gap: 3px; font-size: 11px; }
 .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; border: 1px solid rgba(0,0,0,.15); }
 .vlabel { font: 600 11px system-ui; color: #10233f; text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff; pointer-events: none; white-space: nowrap; }
