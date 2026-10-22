@@ -96,6 +96,12 @@ label.chk input { margin-top: 2px; }
 .vlabel.new { color: #14532d; }
 .vlabel.cut { color: #444; }
 
+.errbar { background: #fee2e2; color: #7f1d1d; border-bottom: 1px solid #fca5a5; padding: 6px 14px; font-size: 13px; }
+.errbar[hidden] { display: none; }
+.map-off { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px;
+           background: #eef2ea; color: var(--ink); text-align: center; }
+.map-off div { max-width: 460px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px;
+               line-height: 1.45; }
 #busy[hidden] { display: none; }
 #busy { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; background: rgba(255,255,255,.4); font-weight: 600; }
 .spinner { width: 22px; height: 22px; border: 3px solid #cfe3d1; border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }

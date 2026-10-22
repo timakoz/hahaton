@@ -1,4 +1,4 @@
-/* ForestMerge — клиент. Без сборки: MapLibre GL из CDN, данные из /api. */
+/* ForestMerge — клиент. Без сборки: MapLibre GL из web/vendor (локально, без CDN), данные из /api. */
 "use strict";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -45,27 +45,45 @@ const TERM_RU = { composition: "состав", dominant_species: "порода",
   bonitet: "бонитет", diameter: "диаметр", tlu: "ТЛУ", forest_type: "тип леса", origin: "происхожд.", stock: "запас/га", land: "кат. земель" };
 
 // ---------------------------------------------------------------- карта
+// Карта не обязательна. Если библиотека не загрузилась или в браузере нет WebGL2 (удалённый рабочий стол,
+// виртуалка, отключённое аппаратное ускорение) — параметры, расчёт, журнал, ТО и экспорт работают без неё.
 const EMPTY = { type: "FeatureCollection", features: [] };
-const map = new maplibregl.Map({
-  container: "map",
-  style: {
-    version: 8,
-    sources: {
-      osm: { type: "raster", tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize: 256, maxzoom: 19, attribution: "© OpenStreetMap" },
-      sat: { type: "raster", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"], tileSize: 256, maxzoom: 18, attribution: "Esri World Imagery" },
+let map = null;
+let mapError = null;
+try {
+  if (new URLSearchParams(location.search).has("nomap")) throw new Error("карта отключена параметром ?nomap");
+  if (typeof maplibregl === "undefined") throw new Error("не загрузилась библиотека карты (maplibre-gl.js)");
+  map = new maplibregl.Map({
+    container: "map",
+    style: {
+      version: 8,
+      sources: {
+        osm: { type: "raster", tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize: 256, maxzoom: 19, attribution: "© OpenStreetMap" },
+        sat: { type: "raster", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"], tileSize: 256, maxzoom: 18, attribution: "Esri World Imagery" },
+      },
+      layers: [
+        { id: "osm", type: "raster", source: "osm", paint: { "raster-saturation": -0.4, "raster-opacity": 0.85 } },
+        { id: "sat", type: "raster", source: "sat", layout: { visibility: "none" } },
+      ],
     },
-    layers: [
-      { id: "osm", type: "raster", source: "osm", paint: { "raster-saturation": -0.4, "raster-opacity": 0.85 } },
-      { id: "sat", type: "raster", source: "sat", layout: { visibility: "none" } },
-    ],
-  },
-  center: [41.965, 61.662], zoom: 12.5,
-});
-map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
+    center: [41.965, 61.662], zoom: 12.5,
+  });
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+  map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
+  map.on("error", (e) => console.warn("карта:", e && e.error ? e.error.message : e));   // недоступные тайлы подложки — не фатально
+} catch (e) {
+  map = null;
+  mapError = e && e.message ? e.message : String(e);
+  console.error("карта недоступна:", e);
+  $("#layerCtl").hidden = true;
+  $("#map").innerHTML = `<div class="map-off"><div><b>Карта недоступна в этом браузере.</b><br>${esc(mapError)}<br><br>
+    Расчёт, карточки решений (вкладка «Журнал»), таблица ТО и экспорт работают и без карты.
+    Для карты нужен браузер с WebGL2: свежий Chrome / Yandex / Firefox / Edge с включённым аппаратным ускорением.</div></div>`;
+}
 
-const mapReady = new Promise((res) => map.on("load", res));
+const mapReady = map ? new Promise((res) => map.on("load", res)) : Promise.resolve();
 mapReady.then(() => {
+  if (!map) return;
   for (const s of ["before", "lesoseki", "fragments", "after", "sel"]) map.addSource(s, { type: "geojson", data: EMPTY });
   map.addLayer({ id: "before-fill", type: "fill", source: "before", paint: { "fill-color": "#000", "fill-opacity": 0.01 } });
   map.addLayer({ id: "before-line", type: "line", source: "before", paint: { "line-color": "#334033", "line-width": 1.1, "line-opacity": 0.8 } });
@@ -88,7 +106,8 @@ mapReady.then(() => {
   }
 });
 
-function vis(id, on) { if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none"); }
+function vis(id, on) { if (map && map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none"); }
+function fitTo(fc, opts) { if (map) map.fitBounds(bboxOf(fc), opts); }
 
 function setView(v) {
   VIEW = v;
@@ -117,7 +136,7 @@ function drawLegend() {
 function drawLabels() {
   markers.forEach((m) => m.remove());
   markers = [];
-  if (!DATA || !$("#tglLabels").checked) return;
+  if (!map || !DATA || !$("#tglLabels").checked) return;
   const fc = VIEW === "after" ? DATA.layers.after : DATA.layers.before;
   for (const f of fc.features) {
     const p = f.properties;
@@ -140,7 +159,7 @@ function bboxOf(fc) {
 }
 
 function highlight(feature) {
-  const src = map.getSource("sel");
+  const src = map && map.getSource("sel");
   if (src) src.setData(feature ? { type: "FeatureCollection", features: [feature] } : EMPTY);
 }
 
@@ -199,19 +218,25 @@ function render(data, keepView) {
   const first = !DATA || DATA.project?.id !== data.project?.id;
   DATA = data;
   mapReady.then(() => {
+    if (!map) return;
     map.getSource("before").setData(data.layers.before);
     map.getSource("lesoseki").setData(data.layers.lesoseki);
     map.getSource("fragments").setData(data.layers.fragments);
     map.getSource("after").setData(data.layers.after);
     highlight(null);
-    if (first) map.fitBounds(bboxOf(data.layers.before), { padding: 30, duration: 0 });
+    if (first) fitTo(data.layers.before, { padding: 30, duration: 0 });
     setView(VIEW);
   });
   fillParams(data);
   renderMetrics(data);
   renderJournal();
   renderTable();
-  if (!keepView) $("#tab-card").innerHTML = `<p class="muted pad">Кликните фрагмент или выдел на карте. Решений: ${data.decisions.length}.</p>`;
+  if (!keepView) {
+    $("#tab-card").innerHTML = map
+      ? `<p class="muted pad">Кликните фрагмент или выдел на карте. Решений: ${data.decisions.length}.</p>`
+      : `<p class="muted pad">Карта недоступна — решения смотрите во вкладке «Журнал», выделы — во вкладке «ТО». Решений: ${data.decisions.length}.</p>`;
+    if (!map) showTab("journal");
+  }
 }
 
 // ---------------------------------------------------------------- итоги
@@ -387,7 +412,7 @@ function renderJournal() {
     setView("fragments");
     selectFragment(x.dataset.frag);
     const f = fragFeature(x.dataset.frag);
-    if (f) map.fitBounds(bboxOf({ features: [f] }), { padding: 120, maxZoom: 16 });
+    if (f) fitTo({ features: [f] }, { padding: 120, maxZoom: 16 });
   }));
 }
 
@@ -403,7 +428,7 @@ function renderTable() {
   $$("#toTable tr[data-vid]").forEach((tr) => tr.addEventListener("click", () => {
     setView("after"); selectAfter(tr.dataset.vid);
     const f = afterFeature(tr.dataset.vid);
-    if (f) map.fitBounds(bboxOf({ features: [f] }), { padding: 80, maxZoom: 16 });
+    if (f) fitTo({ features: [f] }, { padding: 80, maxZoom: 16 });
   }));
 }
 
@@ -419,17 +444,22 @@ function effectiveNorms(data) {
   return merge(base, data?.project?.params || {});
 }
 
+// Поля минимальных площадей всегда показывают нормы того разряда, под которым будут отправлены
+function renderMinAreas(n, rank) {
+  const ma = n.min_area_ha[rank] || n.min_area_ha[String(rank)] || {};
+  const RU = { natural: "естеств. насаждения", contrast: "спелые среди молодняков", unstocked: "культуры / непокрытые", agri: "с/х угодья", nonforest: "нелесные, линейные" };
+  $("#minAreas").innerHTML = Object.entries(ma).map(([k, v]) => `<label>${RU[k] || k}<input type="number" step="0.1" min="0" data-ma="${k}" value="${v}"></label>`).join("");
+  $("#minAreas").dataset.rank = rank;
+  $("#minAreas").closest("fieldset").querySelector("legend").textContent = `Мин. площадь выдела, га (п.196) — ${rank}-й разряд`;
+}
+
 function fillParams(data) {
   const n = effectiveNorms(data);
   const F = $("#params");
   F.rank.value = n.rank ?? "";
   F.method.innerHTML = Object.keys(n.tolerances.table).map((k) => `<option>${esc(k)}</option>`).join("");
   F.method.value = n.tolerances.method;
-  const rank = data?.rank || n.rank || 2;
-  const ma = n.min_area_ha[rank] || n.min_area_ha[String(rank)];
-  const RU = { natural: "естеств. насаждения", contrast: "спелые среди молодняков", unstocked: "культуры / непокрытые", agri: "с/х угодья", nonforest: "нелесные, линейные" };
-  $("#minAreas").innerHTML = Object.entries(ma).map(([k, v]) => `<label>${RU[k] || k}<input type="number" step="0.1" min="0" data-ma="${k}" value="${v}"></label>`).join("");
-  $("#minAreas").dataset.rank = rank;
+  renderMinAreas(n, data?.rank || n.rank || 2);
   F.tech_area.value = n.tech_slivers.max_area_ha;
   F.tech_width.value = n.tech_slivers.min_width_m;
   for (const k of ["similarity", "border", "violation", "same_parent_bonus", "largest_neighbor"]) F["w_" + k].value = n.cost_weights[k];
@@ -446,13 +476,17 @@ function fillParams(data) {
 function collectParams() {
   const F = $("#params");
   const rank = F.rank.value ? Number(F.rank.value) : null;
+  const maRank = rank || Number($("#minAreas").dataset.rank);
   const ma = {};
   $$("#minAreas input").forEach((i) => (ma[i.dataset.ma] = Number(i.value)));
+  // переопределение отправляем, только если пользователь изменил нормы ЛИ для этого разряда
+  const def = CFG.norms.min_area_ha[maRank] || CFG.norms.min_area_ha[String(maRank)] || {};
+  const changed = Object.keys(ma).some((k) => Number(def[k]) !== ma[k]);
   const w = {};
   for (const k of ["similarity", "border", "violation", "same_parent_bonus", "largest_neighbor"]) w[k] = Number(F["w_" + k].value);
   return {
     rank,
-    min_area_ha: { [rank || $("#minAreas").dataset.rank]: ma },
+    ...(changed ? { min_area_ha: { [maRank]: ma } } : {}),
     tolerances: { method: F.method.value },
     tech_slivers: { max_area_ha: Number(F.tech_area.value), min_width_m: Number(F.tech_width.value) },
     cost_weights: w,
@@ -465,6 +499,10 @@ function collectParams() {
 
 // ---------------------------------------------------------------- события
 $("#params").addEventListener("submit", (e) => { e.preventDefault(); runProject(); });
+$("#params").rank.addEventListener("change", (e) => {
+  // «авто» — разряд, который решатель выбрал в последнем расчёте (или 2)
+  renderMinAreas(effectiveNorms(DATA), Number(e.target.value) || DATA?.rank || 2);
+});
 $("#btnResetOv").addEventListener("click", () => runProject({ reset_overrides: true }));
 $$("#layerCtl .seg button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 $("#tglLs").addEventListener("change", () => setView(VIEW));

@@ -4,10 +4,31 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ForestMerge — объединение выделов</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="/static/vendor/maplibre-gl/maplibre-gl.css">
   <link rel="stylesheet" href="/static/style.css">
+  <script>
+    // Любая ошибка скриптов — видимой полосой вверху страницы (чтобы тестер мог прислать скриншот).
+    // Обычный ES5 и до app.js: сработает даже если app.js не загрузился или не разобрался браузером.
+    (function () {
+      function show(msg) {
+        var bar = document.getElementById("errbar");
+        if (!bar) { document.addEventListener("DOMContentLoaded", function () { show(msg); }); return; }
+        bar.hidden = false;
+        bar.textContent = "Ошибка в браузере: " + msg + " — пришлите скриншот этой строки разработчикам.";
+      }
+      window.__fmShowError = show;
+      window.addEventListener("error", function (e) {
+        if (e && e.message) show(e.message + (e.filename ? " (" + e.filename.split("/").pop() + ":" + e.lineno + ")" : ""));
+        else if (e && e.target && e.target.src) show("не загрузился файл " + e.target.src);
+      }, true);
+      window.addEventListener("unhandledrejection", function (e) {
+        var r = e && e.reason; show(r && r.message ? r.message : String(r));
+      });
+    })();
+  </script>
 </head>
 <body>
+<div id="errbar" class="errbar" hidden></div>
 <header>
   <div class="brand">
     <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2 5 12h4l-4 6h6v4h2v-4h6l-4-6h4z"/></svg>
@@ -38,7 +59,7 @@
 
     <section class="card">
       <h3>Параметры <span class="muted small">(ЛИ-2022, настраиваемые)</span></h3>
-      <form id="params" autocomplete="off">
+      <form id="params" autocomplete="off" onsubmit="return false">
         <label>Разряд таксации
           <select name="rank"><option value="">авто по средней площади</option><option>1</option><option>2</option><option>3</option></select>
         </label>
@@ -164,7 +185,7 @@
   </form>
 </dialog>
 
-<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="/static/vendor/maplibre-gl/maplibre-gl.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
