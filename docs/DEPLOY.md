@@ -44,7 +44,7 @@ chmod +x scripts/*.sh
 APP_ONLY=1 ./scripts/setup_server.sh                # .venv без torch (если нет venv: sudo apt install python3-venv)
 ./scripts/state.sh import /tmp/forestmerge_state.tgz   # sha256 должен совпасть с шагом 1
 ./scripts/state.sh check                            # все модели «ok»
-./scripts/train.sh run test                         # 10 тестов на образце
+./scripts/train.sh run test                         # 19 тестов: ядро на образце + авторизация
 ```
 
 Для `git clone` приватного репозитория нужен вход: при запросе пароля вставьте
@@ -67,31 +67,60 @@ systemctl status forestmerge            # логи: journalctl -u forestmerge -f
 ```
 (Используйте что-то одно: А или Б, иначе порт 8765 будет занят.)
 
-Доступ к приложению:
-* **SSH-туннель** (безопасно, для себя): на ноутбуке `ssh -L 8765:localhost:8765 USER@NEW_SERVER` → http://localhost:8765
-* **Открыть наружу** (для жюри/команды): в приложении нет авторизации, поэтому лучше nginx с паролем перед ним:
-  ```nginx
-  # /etc/nginx/sites-available/forestmerge     (пароль: sudo htpasswd -c /etc/nginx/.htpasswd team)
-  server {
-      listen 80;
-      server_name _;
-      client_max_body_size 200m;                 # загрузка выгрузок ТО
-      location / {
-          auth_basic "ForestMerge";
-          auth_basic_user_file /etc/nginx/.htpasswd;
-          proxy_pass http://127.0.0.1:8765;
-          proxy_read_timeout 300;
-      }
-  }
-  ```
-  Без nginx (быстро, но открыто всем): `HOST=0.0.0.0 ./scripts/app.sh start` и открыть порт 8765 в файрволе.
+Приложение слушает только `127.0.0.1:8765` — снаружи к нему доступ через nginx с HTTPS (шаг 6).
+Для себя без HTTPS можно через SSH-туннель: на ноутбуке `ssh -L 8765:localhost:8765 USER@NEW_SERVER`
+→ http://localhost:8765.
 
-Проверка: открыть страницу → «Открыть образец» → в параметрах галка «подключить обученные модели»,
+## 5. Пользователи
+
+Вход в приложение — по логину и паролю (все страницы и API закрыты; см. `api/auth.py`).
+Пользователей создаёт администратор сервера из консоли:
+
+```bash
+./scripts/users.sh add ivanov --admin          # пароль спросит дважды (≥ 10 символов, не только строчные буквы)
+./scripts/users.sh add jury --generate         # сгенерирует пароль и покажет один раз — удобно для жюри
+./scripts/users.sh list                        # кто есть, роли, активные сессии
+./scripts/users.sh passwd ivanov               # сменить пароль (сессии пользователя закроются)
+./scripts/users.sh disable jury | enable jury | del jury
+./scripts/users.sh logout                      # выкинуть всех (например, после показа)
+```
+
+* Роль `admin` дополнительно видит журнал правок (`/api/feedback`) и перезагружает модели; остальное — как у `user`.
+* Сессия живёт 12 часов (`FM_SESSION_HOURS`), cookie `HttpOnly`, `SameSite=Lax`, при HTTPS — `Secure`.
+* После 8 неверных паролей за 15 минут вход для этой пары «IP + логин» блокируется на 15 минут.
+* Каждая правка решения в журнале хранит автора — это видно в данных для дообучения M3.
+* Пользователи и сессии лежат в `data/app.db` и переносятся вместе с моделями (`./scripts/state.sh export`).
+
+## 6. HTTPS на порту 443
+
+Нужно: доменное имя с A-записью на IP сервера (например, `forest.example.ru`), открытые снаружи порты 80 и 443
+(80 — для выдачи и продления сертификата Let's Encrypt и редиректа на HTTPS).
+
+```bash
+sudo ./scripts/setup_https.sh --domain forest.example.ru --email you@example.ru
+```
+
+Скрипт ставит nginx и certbot, получает бесплатный сертификат Let's Encrypt (принимает их условия от вашего имени),
+пишет конфиг из [deploy/nginx-forestmerge.conf](../deploy/nginx-forestmerge.conf) — TLS 1.2/1.3, HTTP→HTTPS,
+HSTS, защитные заголовки, лимит загрузки 200 МБ, таймауты 5 мин — и включает автопродление (таймер certbot,
+после продления nginx перезагружается). Проверить продление: `sudo certbot renew --dry-run`.
+
+Домена нет — самоподписанный сертификат (шифрование есть, но браузер покажет предупреждение, его нужно
+принять вручную; для показа жюри лучше всё же домен — подойдёт и бесплатный поддомен):
+```bash
+sudo ./scripts/setup_https.sh --self-signed --domain 203.0.113.10       # IP сервера
+```
+
+После настройки: https://forest.example.ru → страница входа. Порт 8765 наружу не открывайте
+(приложение и так слушает только 127.0.0.1). Если включён ufw, скрипт сам откроет 80 и 443;
+в облаке (Yandex Cloud, Selectel, VK Cloud…) порты 80/443 открываются ещё и в группе безопасности.
+
+Проверка: войти → «Открыть образец» → в параметрах галка «подключить обученные модели»,
 оценка «правила + ML» → «Рассчитать». В карточке фрагмента появится столбец ML.
 
 ---
 
-## 5. Очистка обучающего сервера
+## 7. Очистка обучающего сервера
 
 Делайте **только после** того, как на новом сервере `./scripts/state.sh check` показал все модели «ok»
 и приложение открылось с моделями.

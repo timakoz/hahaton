@@ -14,10 +14,12 @@
 ```bash
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python -m pytest -q                              # 10 тестов на образце
+.venv\Scripts\python -m pytest -q                              # 19 тестов: ядро на образце + авторизация
 .venv\Scripts\python -m forestmerge run --sample --out out/sample
+.venv\Scripts\python -m api.users add admin --admin          # пользователь для входа (пароль спросит)
 .venv\Scripts\python -m uvicorn api.main:app --port 8765       # → http://localhost:8765
 ```
+Для локальной разработки вход можно отключить: `set FM_AUTH=0` (Windows) / `FM_AUTH=0` (Linux).
 В браузере: «Открыть образец» → карта с фрагментами → клик по фрагменту → карточка решения.
 Docker: `docker compose up --build`.
 
@@ -31,6 +33,8 @@ chmod +x scripts/*.sh
 ./scripts/train.sh start           # обучение в фоне — консоль можно закрыть
 ./scripts/train.sh status          # / log / stop
 ./scripts/app.sh start             # приложение на 127.0.0.1:8765 (с ноутбука: ssh -L 8765:localhost:8765 user@server)
+./scripts/users.sh add ivanov --admin                      # пользователи (вход по логину/паролю)
+sudo ./scripts/setup_https.sh --domain forest.example.ru --email you@example.ru   # HTTPS на 443
 ```
 Скрипты сами выбирают `.venv/bin/python`, а без окружения — `python3`. Подробности и параметры —
 [docs/TRAINING.md](docs/TRAINING.md).
@@ -80,6 +84,8 @@ chmod +x scripts/*.sh
 ## Веб-приложение
 
 FastAPI + статический фронтенд (MapLibre GL с CDN, без сборки):
+* вход по логину и паролю (PBKDF2, сессии HttpOnly/Secure, защита от перебора), роли user/admin;
+  HTTPS на 443 через nginx + Let's Encrypt — [docs/DEPLOY.md](docs/DEPLOY.md);
 * загрузка своих файлов или образца; слои «до / фрагменты / после», лесосеки, подложка OSM/спутник;
 * карточка фрагмента: кандидаты-соседи с баллами, допуски ✓/✗ с пунктами ЛИ, текстовое обоснование;
   кнопки «Принять», «Присоединить к выбранному», «Оставить отдельным (п.197)» → пересчёт и **метка для

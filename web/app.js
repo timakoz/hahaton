@@ -7,8 +7,13 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const fmt = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v) ? "—" : Number(v).toLocaleString("ru-RU", { maximumFractionDigits: d }));
 const fmtA = (a) => (a == null ? "—" : a < 0.1 ? fmt(a, 4) : fmt(a, 2));
 
+function toLogin() {
+  location.replace("/login?next=" + encodeURIComponent(location.pathname + location.search));
+}
+
 async function api(url, opts = {}) {
-  const r = await fetch(url, opts);
+  const r = await fetch(url, { credentials: "same-origin", ...opts });
+  if (r.status === 401) { toLogin(); throw new Error("нужно войти"); }
   if (!r.ok) {
     let msg = r.statusText;
     try { msg = (await r.json()).detail || msg; } catch (_) { /* не JSON */ }
@@ -483,7 +488,8 @@ $("#btnUploadGo").addEventListener("click", async (e) => {
   for (const [k, v] of [...fd.entries()]) if (v instanceof File && !v.name) fd.delete(k);
   setBusy(true);
   try {
-    const r = await fetch("/api/projects", { method: "POST", body: fd });
+    const r = await fetch("/api/projects", { method: "POST", body: fd, credentials: "same-origin" });
+    if (r.status === 401) { toLogin(); return; }
     if (!r.ok) throw new Error((await r.json()).detail);
     const { id } = await r.json();
     $("#dlgUpload").close();
@@ -493,7 +499,16 @@ $("#btnUploadGo").addEventListener("click", async (e) => {
   finally { setBusy(false); }
 });
 
+$("#btnLogout").addEventListener("click", async () => {
+  try { await fetch("/api/logout", { method: "POST", credentials: "same-origin" }); } finally { location.replace("/login"); }
+});
+
 (async function init() {
+  const me = await api("/api/me");
+  if (me.auth) {
+    $("#whoami").textContent = me.user + (me.role === "admin" ? " (админ)" : "");
+    $("#btnLogout").hidden = false;
+  }
   CFG = await api("/api/config");
   fillParams(null);
   const list = await loadProjects();

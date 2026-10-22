@@ -11,7 +11,8 @@ import uuid
 from contextlib import closing
 from pathlib import Path
 
-from forestmerge.settings import DB_PATH, PROJECTS_DIR
+from forestmerge import settings
+from forestmerge.settings import PROJECTS_DIR
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS feedback (
@@ -23,31 +24,35 @@ CREATE TABLE IF NOT EXISTS feedback (
     chosen TEXT,                   -- uid выбранного соседа (для merge/accept)
     model_choice TEXT,             -- что предлагал решатель
     candidates TEXT,               -- JSON: [{uid, features, cost}] на момент решения
-    params TEXT
+    params TEXT,
+    user TEXT                      -- кто принял решение (логин)
 );
 """
 
 
 def _db() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(DB_PATH)
+    settings.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(settings.DB_PATH)
     con.execute(SCHEMA)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(feedback)")}
+    if "user" not in cols:                                   # база от прошлой версии
+        con.execute("ALTER TABLE feedback ADD COLUMN user TEXT")
     return con
 
 
 def add_feedback(project_id: str, fragment: str, action: str, chosen: str | None, model_choice: str | None,
-                 candidates: list[dict], params: dict) -> None:
+                 candidates: list[dict], params: dict, user: str | None = None) -> None:
     with closing(_db()) as con, con:
-        con.execute("INSERT INTO feedback(ts, project_id, fragment, action, chosen, model_choice, candidates, params) "
-                    "VALUES (?,?,?,?,?,?,?,?)",
+        con.execute("INSERT INTO feedback(ts, project_id, fragment, action, chosen, model_choice, candidates, params, "
+                    "user) VALUES (?,?,?,?,?,?,?,?,?)",
                     (time.time(), project_id, fragment, action, chosen, model_choice,
-                     json.dumps(candidates, ensure_ascii=False), json.dumps(params, ensure_ascii=False)))
+                     json.dumps(candidates, ensure_ascii=False), json.dumps(params, ensure_ascii=False), user))
 
 
 def feedback_rows() -> list[dict]:
     with closing(_db()) as con:
-        cur = con.execute("SELECT id, ts, project_id, fragment, action, chosen, model_choice, candidates FROM feedback "
-                          "ORDER BY id")
+        cur = con.execute("SELECT id, ts, project_id, fragment, action, chosen, model_choice, candidates, user "
+                          "FROM feedback ORDER BY id")
         cols = [c[0] for c in cur.description]
         return [dict(zip(cols, r)) for r in cur.fetchall()]
 

@@ -35,6 +35,7 @@ header {
 .hdr-actions .sep { width: 1px; height: 22px; background: rgba(255,255,255,.25); margin: 0 4px; }
 header button.ghost, header select { color: #eef5ea; border-color: rgba(255,255,255,.3); background: transparent; }
 header select option { color: var(--ink); }
+header .who { font-size: 12px; opacity: .85; }
 
 button, select, input {
   font: inherit; color: inherit; border: 1px solid var(--line); border-radius: 6px; background: #fff;

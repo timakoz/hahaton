@@ -4,7 +4,7 @@
 #   ./scripts/app.sh start      # http://127.0.0.1:8765 (с ноутбука: ssh -L 8765:localhost:8765 user@server)
 #   ./scripts/app.sh status | log | stop
 #   PORT=8800 ./scripts/app.sh start
-#   HOST=0.0.0.0 ./scripts/app.sh start    # открыть наружу (авторизации в приложении нет!)
+#   HOST=0.0.0.0 ./scripts/app.sh start    # открыть порт наружу без HTTPS (лучше: sudo ./scripts/setup_https.sh)
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 
@@ -17,7 +17,7 @@ is_running() { [[ -f "$PID_FILE" ]] && ps -p "$(cat "$PID_FILE")" -o pid= >/dev/
 case "${1:-}" in
   start)
     if is_running; then echo "Уже запущено (PID $(cat "$PID_FILE"))"; exit 1; fi
-    nohup $SETSID "$PY" -m uvicorn api.main:app --host "$HOST" --port "$PORT" >> "$LOG" 2>&1 < /dev/null &
+    nohup $SETSID "$PY" -m uvicorn api.main:app --host "$HOST" --port "$PORT" --proxy-headers --forwarded-allow-ips 127.0.0.1 >> "$LOG" 2>&1 < /dev/null &
     echo $! > "$PID_FILE"
     sleep 2
     if is_running; then

@@ -1,7 +1,8 @@
 """ForestMerge API.  Запуск:  uvicorn api.main:app --port 8765   (из корня проекта)
 
-Сценарий: POST /api/projects (или /api/projects/sample) → POST /run → карта и карточки решений →
-POST /decisions (правка специалиста, сохраняется как метка) → GET /export.
+Сценарий: POST /api/login → POST /api/projects (или /api/projects/sample) → POST /run → карта и карточки
+решений → POST /decisions (правка специалиста, сохраняется как метка с автором) → GET /export.
+Все страницы и /api/* (кроме входа и /api/health) требуют сессию — см. api/auth.py.
 """
 from __future__ import annotations
 
@@ -12,8 +13,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from forestmerge.config import list_profiles, load_norms
@@ -21,9 +22,11 @@ from forestmerge.ml_hooks import get_models
 from forestmerge.pipeline import Inputs, export_geojson, export_xlsx, load_inputs, result_json, solve
 from forestmerge.settings import ROOT, find_sample
 
-from . import storage
+from . import auth, storage
 
-app = FastAPI(title="ForestMerge — объединение фрагментированных выделов", version="0.1.0")
+app = FastAPI(title="ForestMerge — объединение фрагментированных выделов", version="0.2.0",
+              docs_url=None, redoc_url=None, openapi_url=None)     # схему API наружу не показываем
+app.add_middleware(auth.AuthMiddleware)
 WEB = ROOT / "web"
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 
@@ -71,7 +74,52 @@ def _result(pid: str) -> dict:
 # --------------------------------------------------------------------------
 @app.get("/")
 def index():
-    return FileResponse(WEB / "index.html")
+    return FileResponse(WEB / "index.html", headers={"Cache-Control": "no-store"})
+
+
+# ------------------------------------------------------------------ вход / выход
+@app.get("/login")
+def login_page(request: Request):
+    if auth.enabled() and auth.session_user(request.cookies.get(auth.COOKIE)):
+        return RedirectResponse("/", status_code=303)
+    return FileResponse(WEB / "login.html", headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/login")
+def login(request: Request, body: dict = Body(...)):
+    if not auth.enabled():
+        return {"ok": True, "user": "local", "role": "admin"}
+    login_ = str(body.get("login", "")).strip()[:64]
+    password = str(body.get("password", ""))[:256]
+    ip = auth.client_ip(request)
+    wait = auth.locked(ip, login_)
+    if wait:
+        raise HTTPException(429, f"слишком много неудачных попыток, повторите через {wait // 60 + 1} мин")
+    user = auth.authenticate(login_, password)
+    if user is None:
+        auth.register_fail(ip, login_)
+        if auth.user_count() == 0:
+            raise HTTPException(401, "пользователей ещё нет — создайте на сервере: ./scripts/users.sh add <логин> --admin")
+        raise HTTPException(401, "неверный логин или пароль")
+    auth.clear_fails(ip, login_)
+    token = auth.create_session(user["login"], ip, request.headers.get("user-agent"))
+    resp = JSONResponse({"ok": True, "user": user["login"], "role": user["role"]})
+    auth.set_cookie(resp, request, token)
+    return resp
+
+
+@app.post("/api/logout")
+def logout(request: Request):
+    auth.drop_session(request.cookies.get(auth.COOKIE))
+    resp = JSONResponse({"ok": True})
+    auth.clear_cookie(resp)
+    return resp
+
+
+@app.get("/api/me")
+def me(request: Request):
+    u = auth.current_user(request)
+    return {"user": u["login"], "role": u["role"], "auth": auth.enabled()}
 
 
 @app.get("/api/health")
@@ -91,7 +139,7 @@ def projects():
 
 
 @app.post("/api/projects/sample")
-def create_sample():
+def create_sample(request: Request):
     s = find_sample()
     if not s["network"]:
         raise HTTPException(404, "файлы образца 5_1/5_2/5_3 не найдены")
@@ -102,12 +150,13 @@ def create_sample():
             shutil.copy(s[k], d / "inputs" / s[k].name)
             files[k] = s[k].name
     storage.save_meta(pid, {"name": "Образец 5 (кв. 29:28:7:105)", "created": time.time(), "files": files,
-                            "params": {}, "overrides": {}})
+                            "params": {}, "overrides": {}, "created_by": auth.current_user(request)["login"]})
     return {"id": pid}
 
 
 @app.post("/api/projects")
-async def create_project(name: str = Form("Проект"), network: UploadFile = File(...), lesoseki: UploadFile = File(...),
+async def create_project(request: Request, name: str = Form("Проект"), network: UploadFile = File(...),
+                         lesoseki: UploadFile = File(...),
                          taxation: UploadFile | None = File(None), volumes: UploadFile | None = File(None),
                          vydel_csv: UploadFile | None = File(None), yarus_csv: UploadFile | None = File(None),
                          podrost_csv: UploadFile | None = File(None)):
@@ -119,7 +168,8 @@ async def create_project(name: str = Form("Проект"), network: UploadFile =
             fn = f"{key}{Path(up.filename).suffix.lower()}"
             (d / "inputs" / fn).write_bytes(await up.read())
             files[key] = fn
-    storage.save_meta(pid, {"name": name, "created": time.time(), "files": files, "params": {}, "overrides": {}})
+    storage.save_meta(pid, {"name": name[:200], "created": time.time(), "files": files, "params": {}, "overrides": {},
+                            "created_by": auth.current_user(request)["login"]})
     try:
         _inputs(pid)
     except Exception as e:  # noqa: BLE001
@@ -153,7 +203,7 @@ def run_project(pid: str, body: dict = Body(default={})):
 
 
 @app.post("/api/projects/{pid}/decisions")
-def decide(pid: str, body: dict = Body(...)):
+def decide(pid: str, request: Request, body: dict = Body(...)):
     """{"fragment": uid, "action": "accept"|"merge"|"keep"|"reset", "target": uid?}"""
     meta = storage.load_meta(pid)
     if meta is None:
@@ -178,7 +228,8 @@ def decide(pid: str, body: dict = Body(...)):
         chosen = dec.get("target")
     else:
         raise HTTPException(400, "action: accept | merge | keep | reset")
-    storage.add_feedback(pid, frag, action, chosen, dec.get("target"), cands, meta.get("params") or {})
+    storage.add_feedback(pid, frag, action, chosen, dec.get("target"), cands, meta.get("params") or {},
+                         auth.current_user(request)["login"])
     meta["overrides"] = ov
     storage.save_meta(pid, meta)
     if action == "accept":
@@ -204,7 +255,8 @@ def export(pid: str, fmt: str = "xlsx"):
 
 
 @app.get("/api/feedback")
-def feedback(limit: int = 200):
+def feedback(request: Request, limit: int = 200):
+    auth.require_admin(request)
     rows = storage.feedback_rows()[-limit:]
     for r in rows:
         r["candidates"] = len(json.loads(r["candidates"] or "[]"))
@@ -212,5 +264,6 @@ def feedback(limit: int = 200):
 
 
 @app.post("/api/models/reload")
-def reload_models():
+def reload_models(request: Request):
+    auth.require_admin(request)
     return get_models(reload=True).status()

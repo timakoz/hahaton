@@ -13,3 +13,4 @@ models/
 *.qgz~
 catboost_info/
 logs/
+data/dev_credentials.txt

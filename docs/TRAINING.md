@@ -21,7 +21,7 @@
 cd /opt/hahaton
 chmod +x scripts/*.sh                 # если git не сохранил права на запуск
 ./scripts/setup_server.sh             # один раз: окружение .venv + зависимости + проверка GPU
-./scripts/train.sh run test           # 10 тестов на образце — ядро работает
+./scripts/train.sh run test           # 19 тестов: ядро на образце + авторизация
 ./scripts/train.sh start              # ВСЁ обучение в фоне: prepare → m2 → m1 → synth → m3
 ```
 
@@ -90,7 +90,7 @@ python3 -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device
 Проверка, что ядро работает:
 
 ```bash
-python3 -m pytest -q                                   # 10 тестов на образце 5_x
+python3 -m pytest -q                                   # 19 тестов: ядро на образце 5_x + авторизация
 python3 -m forestmerge run --sample --out out/sample
 ```
 
