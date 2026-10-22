@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from forestmerge import schema as S
@@ -30,7 +30,28 @@ app = FastAPI(title="ForestMerge — объединение фрагментир
               docs_url=None, redoc_url=None, openapi_url=None)     # схему API наружу не показываем
 app.add_middleware(auth.AuthMiddleware)
 WEB = ROOT / "web"
-app.mount("/static", StaticFiles(directory=WEB), name="static")
+
+
+class _RevalidatedStatic(StaticFiles):
+    """Браузер перепроверяет статику при каждой загрузке (ETag → 304, если не менялась).
+    Без этого Firefox по эвристике держал старый app.js при новой index.html после обновления."""
+
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
+app.mount("/static", _RevalidatedStatic(directory=WEB), name="static")
+
+
+def _versioned_index() -> str:
+    """index.html со ссылками вида /static/app.js?v=<время изменения> — новая версия всегда новый URL."""
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    for name in ("app.js", "style.css"):
+        v = (WEB / name).stat().st_mtime_ns
+        html = html.replace(f"/static/{name}\"", f"/static/{name}?v={v}\"")
+    return html
 
 _LOCK = threading.Lock()
 _CACHE: dict[str, dict[str, Any]] = {}     # pid → {"inputs", "result", "json"}
@@ -109,7 +130,7 @@ def _result(pid: str) -> dict:
 # --------------------------------------------------------------------------
 @app.get("/")
 def index():
-    return FileResponse(WEB / "index.html", headers={"Cache-Control": "no-store"})
+    return HTMLResponse(_versioned_index(), headers={"Cache-Control": "no-store"})
 
 
 # ------------------------------------------------------------------ вход / выход

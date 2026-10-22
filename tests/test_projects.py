@@ -53,6 +53,13 @@ def test_files_one_by_one(client):
     assert client.get(f"/api/projects/{pid}/files").status_code == 404
 
 
+def test_static_not_stale(client):
+    html = client.get("/").text
+    assert '/static/app.js?v=' in html and '/static/style.css?v=' in html
+    r = client.get("/static/app.js")
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-cache"
+
+
 def test_bad_project_id(client):
     assert client.get("/api/projects/..%2F..%2Fetc/files").status_code == 404
     assert client.delete("/api/projects/notavalidid").status_code == 404
