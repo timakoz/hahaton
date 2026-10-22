@@ -139,16 +139,24 @@
 <dialog id="dlgUpload">
   <form method="dialog" id="uploadForm">
     <h3>Загрузка данных квартала</h3>
+    <p class="muted small">Все файлы — <b>одного квартала</b>. Для пробы проще кнопка «Открыть образец» — она загружает
+      файлы образца задачи (в скобках ниже).</p>
     <label>Название<input name="name" value="Проект"></label>
-    <label>Выдельная сеть (GeoJSON, поле label_name) *<input type="file" name="network" accept=".geojson,.json" required></label>
-    <label>Контуры мероприятий — лесосеки (GeoJSON) *<input type="file" name="lesoseki" accept=".geojson,.json" required></label>
-    <label>Таксационное описание (XLSX как «Пример материалов ТО»)<input type="file" name="taxation" accept=".xlsx"></label>
-    <details><summary>…или ТО тремя CSV (cp1251, «;»)</summary>
+    <label>Выдельная сеть (GeoJSON, поле label_name) *<input type="file" name="network" accept=".geojson,.json" required>
+      <span class="hint">образец: «…_выдела+.geojson» (папка 5_2)</span></label>
+    <label>Контуры мероприятий — лесосеки (GeoJSON) *<input type="file" name="lesoseki" accept=".geojson,.json" required>
+      <span class="hint">образец: «…_лесосеки.geojson» (папка 5_1)</span></label>
+    <label>Таксационное описание (XLSX как «Пример материалов ТО»)<input type="file" name="taxation" accept=".xlsx">
+      <span class="hint">образец: «Пример материалов ТО.xlsx» (папка 5_2)</span></label>
+    <details><summary>…или ТО тремя CSV одного квартала (cp1251, «;») — вместо XLSX</summary>
       <label>выдел<input type="file" name="vydel_csv" accept=".csv"></label>
       <label>ярус<input type="file" name="yarus_csv" accept=".csv"></label>
       <label>подрост<input type="file" name="podrost_csv" accept=".csv"></label>
+      <span class="hint">Большие выгрузки «Таксационные описания 20260928 …» сюда не подходят: в них 5600 кварталов
+        без сети выделов, они для обучения моделей.</span>
     </details>
-    <label>Объём заготовленной древесины (CSV как образец 5_3)<input type="file" name="volumes" accept=".csv"></label>
+    <label>Объём заготовленной древесины (CSV как образец 5_3) — необязательно<input type="file" name="volumes" accept=".csv">
+      <span class="hint">образец: «Образец объема заготовленной древесины (зпт).csv» (папка 5_3)</span></label>
     <div class="row end">
       <button value="cancel" class="ghost">Отмена</button>
       <button id="btnUploadGo" class="primary" value="ok">Загрузить</button>

@@ -12,7 +12,6 @@ from contextlib import closing
 from pathlib import Path
 
 from forestmerge import settings
-from forestmerge.settings import PROJECTS_DIR
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS feedback (
@@ -65,13 +64,13 @@ def feedback_count() -> int:
 # --------------------------- проекты ---------------------------
 def new_project_dir() -> tuple[str, Path]:
     pid = uuid.uuid4().hex[:10]
-    d = PROJECTS_DIR / pid
+    d = settings.PROJECTS_DIR / pid
     (d / "inputs").mkdir(parents=True, exist_ok=True)
     return pid, d
 
 
 def project_dir(pid: str) -> Path:
-    return PROJECTS_DIR / pid
+    return settings.PROJECTS_DIR / pid
 
 
 def save_meta(pid: str, meta: dict) -> None:
@@ -84,10 +83,10 @@ def load_meta(pid: str) -> dict | None:
 
 
 def list_projects() -> list[dict]:
-    if not PROJECTS_DIR.exists():
+    if not settings.PROJECTS_DIR.exists():
         return []
     out = []
-    for d in sorted(PROJECTS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+    for d in sorted(settings.PROJECTS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
         m = load_meta(d.name)
         if m:
             out.append({"id": d.name, "name": m.get("name"), "created": m.get("created")})

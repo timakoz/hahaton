@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from forestmerge.config import list_profiles, load_norms
 from forestmerge.ml_hooks import get_models
-from forestmerge.pipeline import Inputs, export_geojson, export_xlsx, load_inputs, result_json, solve
+from forestmerge.pipeline import Inputs, check_inputs, export_geojson, export_xlsx, load_inputs, result_json, solve
 from forestmerge.settings import ROOT, find_sample
 
 from . import auth, storage
@@ -171,11 +171,13 @@ async def create_project(request: Request, name: str = Form("Проект"), net
     storage.save_meta(pid, {"name": name[:200], "created": time.time(), "files": files, "params": {}, "overrides": {},
                             "created_by": auth.current_user(request)["login"]})
     try:
-        _inputs(pid)
+        problems = check_inputs(_inputs(pid))
     except Exception as e:  # noqa: BLE001
+        problems = [f"не удалось прочитать файлы: {e}"]
+    if problems:
         shutil.rmtree(d, ignore_errors=True)
         _CACHE.pop(pid, None)
-        raise HTTPException(400, f"не удалось прочитать файлы: {e}") from e
+        raise HTTPException(400, " ".join(problems))
     return {"id": pid}
 
 

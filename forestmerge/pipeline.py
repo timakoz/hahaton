@@ -45,6 +45,34 @@ def load_inputs(network, taxation, lesoseki, volumes=None, taxation_csv: tuple |
     return Inputs(net, tax, ls, vol, name)
 
 
+def check_inputs(inp: Inputs) -> list[str]:
+    """Понятные ошибки, если файлы перепутаны или это не один квартал. Пустой список — всё в порядке."""
+    errors: list[str] = []
+    net, ls, tax = inp.network, inp.lesoseki, inp.taxation
+    vids = [str(v) for v in net["vid"]]
+    if any("ЛС" in v.upper() for v in vids[:500]):
+        errors.append("В поле «Выдельная сеть» похоже выбран файл лесосек (номера вида …:ЛС1). "
+                      "Нужна сеть выделов квартала с полем label_name — в образце «…выдела+.geojson».")
+    minx, miny, maxx, maxy = net.total_bounds
+    if len(net) > 3000 or (maxx - minx) > 1.0 or (maxy - miny) > 1.0:
+        errors.append(f"«Выдельная сеть» — это не один квартал ({len(net)} объектов, охват "
+                      f"{maxx - minx:.1f}°×{maxy - miny:.1f}°). Загрузите сеть выделов одного квартала.")
+    if not errors and len(ls):
+        if not net.union_all().intersects(ls.union_all()):
+            errors.append("Лесосеки не пересекаются с выдельной сетью — проверьте, что файлы от одного квартала "
+                          "(и не перепутаны поля «Выдельная сеть» и «Лесосеки»).")
+    if S.REG_QUARTER in tax.general and tax.general[S.REG_QUARTER].nunique() > 1:
+        errors.append(f"В CSV таксационного описания {tax.general[S.REG_QUARTER].nunique()} кварталов. "
+                      "Это общая выгрузка для обучения; для расчёта нужен ТО одного квартала "
+                      "(XLSX как «Пример материалов ТО» или CSV одного квартала).")
+    elif len(tax.general) and not errors:
+        found = sum(v in tax.general.index for v in vids)
+        if found == 0:
+            errors.append("Номера выделов в сети (label_name) не совпадают с «Лесоустроительный номер выдела» в ТО — "
+                          "похоже, сеть и таксационное описание от разных кварталов.")
+    return errors
+
+
 def load_sample() -> Inputs:
     p = find_sample()
     missing = [k for k in ("network", "taxation", "lesoseki") if p[k] is None]

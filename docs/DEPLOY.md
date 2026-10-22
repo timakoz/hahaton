@@ -121,7 +121,7 @@ scp forestmerge_state.tgz USER@IP_НОВОГО_СЕРВЕРА:/tmp/
 cd /opt/hahaton
 ./scripts/state.sh import /tmp/forestmerge_state.tgz   # sha256 должен совпасть с шагом 4
 ./scripts/state.sh check                               # все модели «ok»
-./scripts/train.sh run test                            # 19 тестов: ядро + авторизация
+./scripts/train.sh run test                            # 22 теста: ядро, авторизация, проверка загрузки
 ```
 Импорт делайте **до** создания пользователей: он заменяет `data/app.db` (там же пользователи;
 старая копия сохраняется в `data/app.db.bak-…`).

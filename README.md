@@ -14,7 +14,7 @@
 ```bash
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python -m pytest -q                              # 19 тестов: ядро на образце + авторизация
+.venv\Scripts\python -m pytest -q                              # 22 теста: ядро, авторизация, проверка загрузки
 .venv\Scripts\python -m forestmerge run --sample --out out/sample
 .venv\Scripts\python -m api.users add admin --admin          # пользователь для входа (пароль спросит)
 .venv\Scripts\python -m uvicorn api.main:app --port 8765       # → http://localhost:8765
