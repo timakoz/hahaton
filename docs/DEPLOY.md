@@ -43,9 +43,10 @@
 curl -4 -s https://api.ipify.org ; echo
 ```
 
-* Получили **`212.69.86.212`** — новый сервер и есть тот, куда уже указывает звёздочка. DNS трогать
-  **не нужно** → прочитайте раздел «Сценарий Б» в конце, затем продолжайте с шага 3.
-* Получили **другой адрес** (обычный случай) — запишите его, это `IP_НОВОГО_СЕРВЕРА`. Шаг 2.
+* Получили **`212.69.86.212`** — это адрес роутера Proxmox (VM 100), через который выходят в интернет все
+  ваши VM. Если приложение ставите на **одну из VM за роутером** — DNS трогать **не нужно**, идите по разделу
+  **«Сценарий В»** в конце (HTTPS настраивается на роутере). Если ставите **на сам роутер** — «Сценарий Б».
+* Получили **другой адрес** (отдельный сервер со своим публичным IP) — запишите его, это `IP_НОВОГО_СЕРВЕРА`. Шаг 2.
 
 ## Шаг 2. A-запись в DNS — **коллега с доступом к Selectel**
 
@@ -208,6 +209,69 @@ DNS менять не нужно. Но на этом сервере, скоре�
    владельца сервера добавить проксирование `hakaton.softrush.ru` → `http://127.0.0.1:8765`
    (с заголовками `X-Forwarded-Proto` и `X-Real-IP`, лимит тела запроса 200 МБ). Если у компании есть
    сертификат на `*.softrush.ru`, его можно использовать вместо Let's Encrypt.
+
+---
+
+## Сценарий В: Proxmox — сайты раздаёт роутер-VM (наш случай, если приложение на VM за роутером)
+
+```
+интернет ─▶ 212.69.86.212 = VM 100 (router): 80/443, сертификаты, выбор VM по имени сайта
+                  │  hakaton.softrush.ru ─▶ http://APP_VM_IP:8765  (внутренняя сеть intranet/localnetwork)
+                  └─ другие *.softrush.ru ─▶ свои VM
+```
+Тогда: DNS менять **не нужно** (звёздочка уже ведёт на роутер), `setup_https.sh` на VM приложения
+**не запускать** — HTTPS и сертификат делаются на роутере, рядом с остальными сайтами.
+
+**1. Найти, чем роутер раздаёт сайты** — в консоли VM 100 (Proxmox → 100 → Console, или ssh):
+```bash
+sudo ss -ltnp | grep -E ':(80|443) '        # кто слушает 80/443: nginx / haproxy / caddy / traefik / docker-proxy
+sudo docker ps 2>/dev/null                   # Nginx Proxy Manager, Traefik, Caddy в контейнерах
+sudo nginx -T 2>/dev/null | grep -nE 'server_name|proxy_pass|ssl_certificate '   # все сайты nginx разом
+ls /etc/nginx/sites-enabled /etc/nginx/conf.d /etc/haproxy /etc/caddy 2>/dev/null
+sudo iptables -t nat -S 2>/dev/null | grep DNAT ; sudo nft list ruleset 2>/dev/null | grep -i dnat
+```
+| увидели | где настраивать |
+|---|---|
+| `nginx` | файлы в `/etc/nginx/sites-enabled/` или `/etc/nginx/conf.d/` — по одному на сайт; `nginx -T` показывает все |
+| контейнер `jc21/nginx-proxy-manager` | веб-интерфейс `http://<IP роутера>:81` → Proxy Hosts → Add |
+| `haproxy` | `/etc/haproxy/haproxy.cfg` (правила `acl … hdr(host)` / `req.ssl_sni`) |
+| `caddy` | `/etc/caddy/Caddyfile` |
+| `traefik` | `traefik.yml` / метки (labels) контейнеров |
+| ничего, только DNAT в iptables/nft | роутер просто пересылает порты на одну VM — сайты раздаёт та VM, ищите там |
+| pfSense / OPNsense (веб-панель) | Services → HAProxy (или nginx), Firewall → NAT |
+
+**2. VM для приложения.** Возьмите существующую подходящую (например, `106 (app)`) или новую
+(`101 (ubuntu-26.04)`), подключённую к той же внутренней сети, что и роутер. Узнайте её адрес: `ip -4 addr`
+(это `APP_VM_IP`), и адрес роутера во внутренней сети: `ip route | grep default` (это `ROUTER_IP`).
+Дальше на ней — шаги 4–7 основной инструкции (код, модели, пользователи).
+На Ubuntu 26.04 Python может быть слишком новым для части колёс (catboost, onnxruntime); если
+`setup_server.sh` упадёт на установке — `sudo apt install python3.12 python3.12-venv` и
+`PYTHON_BIN=python3.12 APP_ONLY=1 ./scripts/setup_server.sh`.
+
+**3. Сервис приложения слушает внутреннюю сеть и доверяет только роутеру** (вместо шага 8):
+```bash
+cd /opt/hahaton
+ROUTER_IP=10.0.0.1          # ← подставьте свой
+sed "s#__USER__#$USER#g; s#__DIR__#$PWD#g; s#FM_HOST=127.0.0.1#FM_HOST=0.0.0.0#; s#FM_FWD=127.0.0.1#FM_FWD=$ROUTER_IP#; s#FM_COOKIE_SECURE=auto#FM_COOKIE_SECURE=1#" \
+    deploy/forestmerge.service | sudo tee /etc/systemd/system/forestmerge.service
+sudo systemctl daemon-reload && sudo systemctl enable --now forestmerge
+# порт 8765 — только для роутера (если на VM включён ufw)
+sudo ufw allow from $ROUTER_IP to any port 8765 proto tcp
+```
+Проверка с роутера: `curl -s http://APP_VM_IP:8765/api/health` → `{"ok":true,...}`.
+
+**4. Добавить сайт на роутере.** Для nginx — готовый блок [deploy/router-nginx-hakaton.conf](../deploy/router-nginx-hakaton.conf):
+лучше скопировать файл соседнего сайта (в нём уже верные пути к сертификату), поменять `server_name` на
+`hakaton.softrush.ru` и `proxy_pass` на `http://APP_VM_IP:8765`, проверить заголовки как в шаблоне, затем
+`sudo nginx -t && sudo systemctl reload nginx`. Сертификат: если у соседних сайтов общий `*.softrush.ru` —
+те же пути; иначе на роутере `sudo certbot certonly --webroot -w /var/www/certbot -d hakaton.softrush.ru`
+(или `sudo certbot --nginx -d hakaton.softrush.ru`, если там так уже делали).
+Для Nginx Proxy Manager: Proxy Hosts → Add → Domain `hakaton.softrush.ru`, Scheme `http`,
+Forward IP `APP_VM_IP`, Port `8765`; вкладка SSL → Request a new certificate (или существующий wildcard),
+Force SSL; Advanced → `client_max_body_size 200m;`.
+
+Обязательно, чтобы прокси передавал `Host` (исходное имя сайта) и `X-Forwarded-Proto` — иначе вход
+будет отклонён как «запрос с чужого сайта». `X-Real-IP` нужен для защиты от перебора паролей.
 
 ---
 

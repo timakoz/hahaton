@@ -3,6 +3,11 @@
 #   sed "s#__USER__#$USER#g; s#__DIR__#$PWD#g" deploy/forestmerge.service | sudo tee /etc/systemd/system/forestmerge.service
 #   sudo systemctl daemon-reload && sudo systemctl enable --now forestmerge
 #   systemctl status forestmerge ; journalctl -u forestmerge -f
+#
+# Сайт за отдельным роутером/прокси (Proxmox: роутер-VM принимает 80/443 и пересылает сюда), например
+# роутер 10.0.0.1, эта VM 10.0.0.106 — установить так:
+#   sed "s#__USER__#$USER#g; s#__DIR__#$PWD#g; s#FM_HOST=127.0.0.1#FM_HOST=0.0.0.0#; s#FM_FWD=127.0.0.1#FM_FWD=10.0.0.1#; s#FM_COOKIE_SECURE=auto#FM_COOKIE_SECURE=1#" \
+#       deploy/forestmerge.service | sudo tee /etc/systemd/system/forestmerge.service
 [Unit]
 Description=ForestMerge web app
 After=network.target
@@ -11,8 +16,11 @@ After=network.target
 User=__USER__
 WorkingDirectory=__DIR__
 Environment=PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
-# 127.0.0.1 — снаружи доступ только через nginx с HTTPS (scripts/setup_https.sh) или SSH-туннель
-ExecStart=__DIR__/.venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 8765 --proxy-headers --forwarded-allow-ips 127.0.0.1
+# FM_HOST    — где слушать: 127.0.0.1 (nginx на этой же машине) или 0.0.0.0 (прокси на другой машине)
+# FM_FWD     — чьим заголовкам X-Forwarded-* доверять: адрес прокси (nginx здесь — 127.0.0.1, роутер — его IP)
+# FM_COOKIE_SECURE — 1, если HTTPS заканчивается на роутере (cookie только по HTTPS); auto — по заголовкам
+Environment=FM_HOST=127.0.0.1 FM_FWD=127.0.0.1 FM_COOKIE_SECURE=auto
+ExecStart=__DIR__/.venv/bin/python -m uvicorn api.main:app --host ${FM_HOST} --port 8765 --proxy-headers --forwarded-allow-ips ${FM_FWD}
 Restart=on-failure
 RestartSec=5
 
