@@ -38,7 +38,8 @@
   <div class="hdr-actions">
     <select id="projectSelect" title="Проект"></select>
     <button id="btnSample" class="ghost">Открыть образец</button>
-    <button id="btnUpload" class="ghost">Загрузить данные…</button>
+    <button id="btnNew" class="ghost" title="Создать проект и добавить файлы по одному">Новый проект…</button>
+    <button id="btnFiles" class="ghost" title="Файлы текущего проекта: добавить, заменить, удалить">Файлы проекта…</button>
     <span class="sep"></span>
     <button data-export="xlsx" class="ghost" title="ТО в формате образца + журнал решений">XLSX</button>
     <button data-export="geojson" class="ghost">GeoJSON</button>
@@ -53,66 +54,76 @@
   <aside id="left">
     <section class="card" id="metricsCard">
       <h3>Итог</h3>
-      <div id="metrics" class="metrics"><p class="muted">Откройте образец или загрузите данные.</p></div>
+      <div id="metrics" class="metrics"><p class="muted">Откройте образец или создайте проект («Новый проект…»).</p></div>
       <div id="warnings"></div>
     </section>
 
     <section class="card">
-      <h3>Параметры <span class="muted small">(ЛИ-2022, настраиваемые)</span></h3>
+      <h3>Параметры <button type="button" class="help-btn" id="btnHelp" title="Что значат параметры">?</button></h3>
+      <div class="profile-row">
+        <label>Профиль параметров
+          <select id="profileSelect" title="Сохранённые наборы параметров. ЛИ-2022 — нормы инструкции по умолчанию"></select>
+        </label>
+        <div class="row tight">
+          <button type="button" class="ghost" id="btnProfileSave" title="Сохранить текущие значения формы как профиль">Сохранить как…</button>
+          <button type="button" class="ghost danger" id="btnProfileDel" title="Удалить выбранный профиль" disabled>Удалить</button>
+        </div>
+      </div>
       <form id="params" autocomplete="off" onsubmit="return false">
-        <label>Разряд таксации
+        <label title="Определяет минимальную площадь выдела (п.196 ЛИ). «Авто» — по средней площади выдела в квартале (только подсказка)">Разряд таксации
           <select name="rank"><option value="">авто по средней площади</option><option>1</option><option>2</option><option>3</option></select>
         </label>
-        <label>Способ таксации (допуски п.215)
+        <label title="Задаёт допуски п.215: насколько объединённый выдел может отличаться от основного по запасу, составу и полноте">Способ таксации (допуски п.215)
           <select name="method"></select>
         </label>
-        <fieldset>
+        <fieldset title="Фрагменты меньше этих площадей присоединяются к соседям (п.196)">
           <legend>Мин. площадь выдела, га (п.196) для выбранного разряда</legend>
           <div class="grid2" id="minAreas"></div>
         </fieldset>
-        <fieldset>
+        <fieldset title="Ошибки совмещения контура лесосеки с сетью: прилипают к своему выделу без сравнения таксации">
           <legend>Технологические осколки</legend>
           <div class="grid2">
-            <label>площадь до, га<input name="tech_area" type="number" step="0.01" min="0"></label>
-            <label>ширина до, м<input name="tech_width" type="number" step="1" min="0"></label>
+            <label title="Кусок меньше этой площади — шум оцифровки">площадь до, га<input name="tech_area" type="number" step="0.01" min="0"></label>
+            <label title="Полоска уже этой ширины (и не больше 0,5 га) — тоже шум">ширина до, м<input name="tech_width" type="number" step="1" min="0"></label>
           </div>
         </fieldset>
-        <fieldset>
-          <legend>Выбор соседа</legend>
+        <fieldset title="Веса функции стоимости: из смежных соседей выбирается вариант с наименьшей стоимостью">
+          <legend>Выбор соседа (веса)</legend>
           <div class="grid2">
-            <label>сходство<input name="w_similarity" type="number" step="0.1"></label>
-            <label>общая граница<input name="w_border" type="number" step="0.1"></label>
-            <label>нарушение допуска<input name="w_violation" type="number" step="0.1"></label>
-            <label>тот же выдел<input name="w_same_parent_bonus" type="number" step="0.1"></label>
-            <label>крупнейший сосед<input name="w_largest_neighbor" type="number" step="0.1"></label>
-            <label>оценка
+            <label title="Насколько важна похожесть по таксации (состав, порода, возраст, полнота, бонитет, диаметр, ТЛУ, тип леса, запас)">сходство<input name="w_similarity" type="number" step="0.1"></label>
+            <label title="Предпочитать соседа с большей общей границей — получается компактный выдел">общая граница<input name="w_border" type="number" step="0.1"></label>
+            <label title="Штраф за каждое нарушение допуска п.215 (запас, коэффициент состава, полнота, смена породы/группы возраста)">нарушение допуска<input name="w_violation" type="number" step="0.1"></label>
+            <label title="Бонус за присоединение к части того же исходного выдела">тот же выдел<input name="w_same_parent_bonus" type="number" step="0.1"></label>
+            <label title="Предпочитать более крупного соседа (п.218 разрешает присоединять к наиболее крупному)">крупнейший сосед<input name="w_largest_neighbor" type="number" step="0.1"></label>
+            <label title="Как ранжировать соседей: только правила, правила с поправкой ML-модели, только ML-модель">оценка
               <select name="scoring"><option value="rules">правила</option><option value="hybrid">правила + ML</option><option value="ml">ML-ранжировщик</option></select>
             </label>
+            <label title="Для «правила + ML»: насколько сильно балл модели сдвигает стоимость правил">вес ML<input name="ml_weight" type="number" step="0.1" min="0"></label>
           </div>
         </fieldset>
         <fieldset>
           <legend>Пересчёт и мероприятия</legend>
           <div class="grid2">
-            <label>бонитет
+            <label title="Бонитет объединённого выдела: самый частый по площади или от основного (принимающего) выдела">бонитет
               <select name="bonitet"><option value="mode_by_area">мода по площади</option><option value="inherit_main">от основного</option></select>
             </label>
-            <label>нумерация
+            <label title="Какие номера получают выделы после перестройки">нумерация
               <select name="numbering"><option value="keep_largest">номер у крупнейшей части</option><option value="new_after_max">все новые после max</option></select>
             </label>
-            <label>рубка без файла объёмов
+            <label title="Вид рубки для лесосек, по которым не загружен файл объёмов">рубка без файла объёмов
               <select name="default_form"><option>Сплошная рубка</option><option>Выборочная рубка</option></select>
             </label>
-            <label>вид земель после сплошной
+            <label title="Как называть землю на месте сплошной рубки: «Вырубка» — вырублено, «Лесосека» — отведено, но ещё не вырублено">вид земель после сплошной
               <select name="clearcut_kind"><option>Вырубка</option><option>Лесосека</option></select>
             </label>
           </div>
-          <label class="chk"><input type="checkbox" name="allow_violation"> сливать с лучшим соседом, даже если допуски нарушены (с отметкой «проверить»)</label>
-          <label class="chk"><input type="checkbox" name="keep_preexisting"> не трогать выделы, бывшие меньше минимума до рубки</label>
-          <label class="chk"><input type="checkbox" name="use_models"> подключить обученные модели (models/)</label>
+          <label class="chk" title="Если все соседи нарушают допуски: да — объединить с лучшим и пометить «проверить»; нет — оставить мелкий выдел по п.197"><input type="checkbox" name="allow_violation"> сливать с лучшим соседом, даже если допуски нарушены (с отметкой «проверить»)</label>
+          <label class="chk" title="Выделы, которые были меньше минимума ещё до рубки, не заставлять объединяться"><input type="checkbox" name="keep_preexisting"> не трогать выделы, бывшие меньше минимума до рубки</label>
+          <label class="chk" title="M2 восстанавливает пропуски H/D/возраста, M1 — сходство выделов, M3 — балл соседа для оценки с ML. Для оценки с ML включается автоматически"><input type="checkbox" name="use_models"> подключить обученные модели (models/)</label>
         </fieldset>
         <div class="row">
           <button type="submit" class="primary" id="btnRun">Рассчитать</button>
-          <button type="button" class="ghost" id="btnResetOv" title="Сбросить ручные решения">Сбросить правки</button>
+          <button type="button" class="ghost" id="btnResetOv" title="Сбросить ручные решения по фрагментам">Сбросить правки</button>
         </div>
       </form>
     </section>
@@ -157,32 +168,93 @@
   </aside>
 </main>
 
-<dialog id="dlgUpload">
-  <form method="dialog" id="uploadForm">
-    <h3>Загрузка данных квартала</h3>
-    <p class="muted small">Все файлы — <b>одного квартала</b>. Для пробы проще кнопка «Открыть образец» — она загружает
-      файлы образца задачи (в скобках ниже).</p>
-    <label>Название<input name="name" value="Проект"></label>
-    <label>Выдельная сеть (GeoJSON, поле label_name) *<input type="file" name="network" accept=".geojson,.json" required>
-      <span class="hint">образец: «…_выдела+.geojson» (папка 5_2)</span></label>
-    <label>Контуры мероприятий — лесосеки (GeoJSON) *<input type="file" name="lesoseki" accept=".geojson,.json" required>
-      <span class="hint">образец: «…_лесосеки.geojson» (папка 5_1)</span></label>
-    <label>Таксационное описание (XLSX как «Пример материалов ТО»)<input type="file" name="taxation" accept=".xlsx">
-      <span class="hint">образец: «Пример материалов ТО.xlsx» (папка 5_2)</span></label>
-    <details><summary>…или ТО тремя CSV одного квартала (cp1251, «;») — вместо XLSX</summary>
-      <label>выдел<input type="file" name="vydel_csv" accept=".csv"></label>
-      <label>ярус<input type="file" name="yarus_csv" accept=".csv"></label>
-      <label>подрост<input type="file" name="podrost_csv" accept=".csv"></label>
-      <span class="hint">Большие выгрузки «Таксационные описания 20260928 …» сюда не подходят: в них 5600 кварталов
-        без сети выделов, они для обучения моделей.</span>
-    </details>
-    <label>Объём заготовленной древесины (CSV как образец 5_3) — необязательно<input type="file" name="volumes" accept=".csv">
-      <span class="hint">образец: «Образец объема заготовленной древесины (зпт).csv» (папка 5_3)</span></label>
-    <div class="row end">
-      <button value="cancel" class="ghost">Отмена</button>
-      <button id="btnUploadGo" class="primary" value="ok">Загрузить</button>
+<dialog id="dlgFiles">
+  <div class="dlg-head">
+    <h3 id="filesTitle">Файлы проекта</h3>
+    <button type="button" class="ghost" id="btnFilesClose" title="Закрыть">✕</button>
+  </div>
+  <div id="filesNew">
+    <p class="muted small">Создайте проект, затем добавляйте файлы по одному — каждый проверяется сразу при загрузке.
+      Все файлы — <b>одного квартала</b>. Для пробы проще «Открыть образец».</p>
+    <div class="row">
+      <input id="newName" value="Проект" maxlength="200" style="flex:1">
+      <button type="button" class="primary" id="btnCreate">Создать</button>
     </div>
-  </form>
+  </div>
+  <div id="filesBody" hidden>
+    <div class="row">
+      <input id="projName" maxlength="200" style="flex:1" title="Название проекта">
+      <button type="button" class="ghost" id="btnRename">Переименовать</button>
+    </div>
+    <table class="slots"><tbody id="slotRows"></tbody></table>
+    <div id="filesMsgs"></div>
+    <div class="row end">
+      <button type="button" class="ghost danger" id="btnProjDel">Удалить проект</button>
+      <span style="flex:1"></span>
+      <button type="button" class="primary" id="btnFilesRun" disabled>Рассчитать</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlgHelp" class="help">
+  <div class="dlg-head"><h3>Что значат параметры</h3><button type="button" class="ghost" id="btnHelpClose">✕</button></div>
+  <div class="help-body">
+    <p><b>Профиль параметров</b> — сохранённый набор всех значений этой панели. «ЛИ-2022» — нормы инструкции по умолчанию.
+      «Сохранить как…» запоминает текущие значения под именем (то же имя — обновить), выбор профиля заполняет форму;
+      расчёт — по кнопке «Рассчитать».</p>
+    <h4>Разряд и допуски</h4>
+    <p><b>Разряд таксации</b> (I/II/III) задаёт минимальные площади выделов по п.196 ЛИ-2022. «Авто» выбирает по средней
+      площади выдела в квартале — это лишь подсказка, лучше указать явно.</p>
+    <p><b>Способ таксации</b> задаёт допуски п.215, по которым проверяется каждое объединение (п.218): насколько
+      объединённый выдел может отличаться от основного. Глазомерно-измерительный — строже всего (запас ±15 %,
+      коэффициент состава ±1 ед., полнота ±0,1), глазомерный — ±20 %, ±1,5, ±0,1; ДЗЗ и актуализация — мягче (до ±30 %, ±2, ±0,2).</p>
+    <p><b>Минимальная площадь выдела</b> — по категориям: естественные насаждения; спелые среди молодняков и наоборот;
+      культуры и не покрытые лесом земли (вырубки); с/х угодья; просеки, дороги и другие нелесные. Фрагмент меньше
+      минимума присоединяется к соседу. Значения можно менять (п.197 допускает свои нормы по решению совещания).</p>
+    <h4>Технологические осколки</h4>
+    <p>Мелкие куски, возникшие из-за неточного совмещения контура лесосеки (GPS) с сетью. Всё, что меньше
+      <b>«площадь до»</b> или уже <b>«ширина до»</b> (и не больше 0,5 га), считается ошибкой контура: кусок прилипает к своему
+      выделу (или к соседу с самой длинной общей границей) без сравнения таксации.</p>
+    <h4>Выбор соседа — веса</h4>
+    <p>Для мелкого фрагмента перебираются смежные выделы. Несовместимые отбрасываются (насаждение не присоединяется к просеке
+      и т.п.). Для остальных считается <b>стоимость</b>, побеждает наименьшая:</p>
+    <p class="formula">стоимость = сходство × таксационная дистанция + общая граница × (1 − доля общей границы)
+      + нарушение допуска × число нарушений − тот же выдел × [часть того же выдела] + крупнейший сосед × (1 − S / S<sub>max</sub>)</p>
+    <ul>
+      <li><b>сходство</b> — вес похожести по таксации: состав, порода, возраст, полнота, бонитет, диаметр, ТЛУ, тип леса,
+        происхождение, запас (каждое различие нормировано порогом ЛИ: 1 = ровно порог обособления).</li>
+      <li><b>общая граница</b> — предпочитать соседа, с которым у фрагмента длиннее общая граница (компактный выдел).</li>
+      <li><b>нарушение допуска</b> — штраф за каждое нарушение п.215: запас на 1 га, коэффициент состава, полнота, смена
+        преобладающей породы или группы возраста. Большое значение = почти запрет нарушать.</li>
+      <li><b>тот же выдел</b> — бонус за присоединение к части того же исходного выдела (восстановление).</li>
+      <li><b>крупнейший сосед</b> — п.218 разрешает присоединять «к наиболее крупному из примыкающих».</li>
+    </ul>
+    <h4>Оценка</h4>
+    <ul>
+      <li><b>правила</b> — только стоимость выше. Полностью прозрачно и воспроизводимо, каждое решение объясняется пунктами ЛИ.</li>
+      <li><b>правила + ML</b> — к стоимости правил добавляется балл ранжировщика M3 (LightGBM): итог = стоимость − <b>вес ML</b> × балл.
+        M3 обучен на тысячах синтетических рубок, где «учитель» для каждого варианта доигрывал квартал до конца
+        (то есть заглядывал вперёд), и на правках специалистов из этого приложения. На отложенных данных он выбирает лучший
+        вариант в 86,7 % случаев против 82,1 % у одних правил. Обученные модели подключаются автоматически.</li>
+      <li><b>ML-ранжировщик</b> — только балл модели. Жёсткие запреты (несовместимые категории земель) и отметки о нарушении
+        допусков работают всё равно.</li>
+    </ul>
+    <p>В карточке фрагмента видно и «Балл» правил, и столбец «ML» — можно сравнить, где они расходятся.</p>
+    <h4>Пересчёт и мероприятия</h4>
+    <ul>
+      <li><b>бонитет</b> объединённого выдела: «мода по площади» — самый частый по площади среди частей; «от основного» — как у принимающего.</li>
+      <li><b>нумерация</b>: «номер у крупнейшей части» — крупнейшая часть исходного выдела сохраняет номер, новые получают
+        номера после максимального (с северо-запада на юго-восток, п.290); «все новые после max» — номера получают все изменённые выделы.</li>
+      <li><b>рубка без файла объёмов</b> — вид рубки для лесосек без данных о заготовке: сплошная → выдел-вырубка с запасом 0;
+        выборочная без объёмов запас не уменьшает (будет предупреждение).</li>
+      <li><b>вид земель после сплошной</b>: «Вырубка» — лес вырублен; «Лесосека» — участок отведён, но ещё не вырублен.</li>
+      <li><b>сливать с лучшим соседом, даже если допуски нарушены</b> — если все соседи нарушают допуски: включено —
+        объединить с лучшим и пометить «проверить»; выключено — оставить мелкий выдел с пометкой п.197.</li>
+      <li><b>не трогать выделы, бывшие меньше минимума до рубки</b> — такие выделы существовали и раньше, их не заставляем объединяться.</li>
+      <li><b>подключить обученные модели</b> — M2 восстанавливает пропущенные высоты, диаметры и возрасты пород (сходство
+        считается точнее), M1 даёт «похожесть выделов в целом», M3 — балл для оценки с ML.</li>
+    </ul>
+  </div>
 </dialog>
 
 <script src="/static/vendor/maplibre-gl/maplibre-gl.js"></script>

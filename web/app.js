@@ -29,6 +29,8 @@ let DATA = null;    // результат расчёта
 let VIEW = "fragments";
 let SEL = null;     // {kind: 'frag'|'after'|'before', id}
 let markers = [];
+let PROFILES = [];
+let FILES_PID = null;
 
 const CLASS = {
   small:   { c: "#f59e0b", t: "мельче минимума → объединение" },
@@ -191,7 +193,7 @@ async function openProject(pid) {
   PID = pid;
   setBusy(true);
   try { render(await api(`/api/projects/${pid}/result`)); }
-  catch (e) { alert("Ошибка: " + e.message); }
+  catch (e) { clearView(e.message); openFiles(pid); }
   finally { setBusy(false); }
 }
 
@@ -199,7 +201,8 @@ async function runProject(extra = {}) {
   if (!PID) return;
   setBusy(true);
   try {
-    const body = { params: collectParams(), use_models: $("[name=use_models]").checked, ...extra };
+    const pr = PROFILES.find((x) => x.id === $("#profileSelect").value && !x.builtin);
+    const body = { params: collectParams(), use_models: $("[name=use_models]").checked, profile_name: pr ? pr.name : null, ...extra };
     render(await post(`/api/projects/${PID}/run`, body));
   } catch (e) { alert("Ошибка расчёта: " + e.message); }
   finally { setBusy(false); }
@@ -438,11 +441,11 @@ function showTab(t) {
 }
 
 // ---------------------------------------------------------------- параметры
-function effectiveNorms(data) {
-  const base = JSON.parse(JSON.stringify(CFG.norms));
-  const merge = (a, b) => { for (const [k, v] of Object.entries(b || {})) { if (v && typeof v === "object" && !Array.isArray(v) && a[k]) merge(a[k], v); else a[k] = v; } return a; };
-  return merge(base, data?.project?.params || {});
+function normsWith(overrides) {
+  const merge = (a, b) => { for (const [k, v] of Object.entries(b || {})) { if (v && typeof v === "object" && !Array.isArray(v) && a[k]) merge(a[k], v); else if (v !== null && v !== undefined) a[k] = v; } return a; };
+  return merge(JSON.parse(JSON.stringify(CFG.norms)), overrides || {});
 }
+function effectiveNorms(data) { return normsWith(data?.project?.params); }
 
 // Поля минимальных площадей всегда показывают нормы того разряда, под которым будут отправлены
 function renderMinAreas(n, rank) {
@@ -453,24 +456,32 @@ function renderMinAreas(n, rank) {
   $("#minAreas").closest("fieldset").querySelector("legend").textContent = `Мин. площадь выдела, га (п.196) — ${rank}-й разряд`;
 }
 
-function fillParams(data) {
-  const n = effectiveNorms(data);
+function fillForm(overrides, useModels, lastRank) {
+  const n = normsWith(overrides);
   const F = $("#params");
   F.rank.value = n.rank ?? "";
   F.method.innerHTML = Object.keys(n.tolerances.table).map((k) => `<option>${esc(k)}</option>`).join("");
   F.method.value = n.tolerances.method;
-  renderMinAreas(n, data?.rank || n.rank || 2);
+  renderMinAreas(n, n.rank || lastRank || 2);
   F.tech_area.value = n.tech_slivers.max_area_ha;
   F.tech_width.value = n.tech_slivers.min_width_m;
   for (const k of ["similarity", "border", "violation", "same_parent_bonus", "largest_neighbor"]) F["w_" + k].value = n.cost_weights[k];
   F.scoring.value = n.scoring;
+  F.ml_weight.value = n.ml_weight ?? 1;
   F.bonitet.value = n.recalc.bonitet;
   F.numbering.value = n.recalc.numbering;
   F.default_form.value = n.cut.default_form;
   F.clearcut_kind.value = n.cut.clearcut_land_kind;
   F.allow_violation.checked = n.rules.allow_violation_if_no_alternative;
   F.keep_preexisting.checked = n.rules.keep_preexisting_small;
-  F.use_models.checked = !!data?.project?.use_models;
+  F.use_models.checked = !!useModels || n.scoring !== "rules";
+}
+
+function fillParams(data) {
+  fillForm(data?.project?.params, data?.project?.use_models, data?.rank);
+  const pr = PROFILES.find((x) => !x.builtin && x.name === data?.project?.profile_name);
+  $("#profileSelect").value = pr ? pr.id : "builtin";
+  $("#btnProfileDel").disabled = $("#profileSelect").value === "builtin";
 }
 
 function collectParams() {
@@ -491,6 +502,7 @@ function collectParams() {
     tech_slivers: { max_area_ha: Number(F.tech_area.value), min_width_m: Number(F.tech_width.value) },
     cost_weights: w,
     scoring: F.scoring.value,
+    ml_weight: Number(F.ml_weight.value) || 0,
     recalc: { bonitet: F.bonitet.value, numbering: F.numbering.value },
     cut: { default_form: F.default_form.value, clearcut_land_kind: F.clearcut_kind.value },
     rules: { allow_violation_if_no_alternative: F.allow_violation.checked, keep_preexisting_small: F.keep_preexisting.checked },
@@ -517,24 +529,154 @@ $("#btnSample").addEventListener("click", async () => {
   await loadProjects(id);
   openProject(id);
 });
-$("#btnUpload").addEventListener("click", () => $("#dlgUpload").showModal());
-$("#btnUploadGo").addEventListener("click", async (e) => {
-  e.preventDefault();
-  const form = $("#uploadForm");
-  if (!form.reportValidity()) return;
-  const fd = new FormData(form);
-  for (const [k, v] of [...fd.entries()]) if (v instanceof File && !v.name) fd.delete(k);
-  setBusy(true);
+$("#params").scoring.addEventListener("change", (e) => { if (e.target.value !== "rules") $("#params").use_models.checked = true; });
+$("#btnHelp").addEventListener("click", () => $("#dlgHelp").showModal());
+$("#btnHelpClose").addEventListener("click", () => $("#dlgHelp").close());
+
+// ---------------------------------------------------------------- профили параметров
+async function loadProfiles(selectId) {
+  PROFILES = await api("/api/profiles");
+  const sel = $("#profileSelect");
+  sel.innerHTML = PROFILES.map((p) => `<option value="${p.id}">${esc(p.name)}${p.builtin ? "" : " · " + esc(p.created_by || "")}</option>`).join("");
+  sel.value = selectId && PROFILES.some((p) => p.id === selectId) ? selectId : "builtin";
+  $("#btnProfileDel").disabled = sel.value === "builtin";
+}
+$("#profileSelect").addEventListener("change", async (e) => {
+  const p = await api(`/api/profiles/${e.target.value}`);
+  fillForm(p.params, p.use_models, DATA?.rank);
+  $("#btnProfileDel").disabled = !!p.builtin;
+});
+$("#btnProfileSave").addEventListener("click", async () => {
+  const cur = PROFILES.find((x) => x.id === $("#profileSelect").value && !x.builtin);
+  const name = prompt("Название профиля (то же имя — обновить существующий):", cur ? cur.name : "");
+  if (!name || !name.trim()) return;
   try {
-    const r = await fetch("/api/projects", { method: "POST", body: fd, credentials: "same-origin" });
-    if (r.status === 401) { toLogin(); return; }
-    if (!r.ok) throw new Error((await r.json()).detail);
-    const { id } = await r.json();
-    $("#dlgUpload").close();
-    await loadProjects(id);
-    await openProject(id);
-  } catch (err) { alert("Ошибка загрузки: " + err.message); }
-  finally { setBusy(false); }
+    const p = await post("/api/profiles", { name: name.trim(), params: collectParams(), use_models: $("#params").use_models.checked });
+    await loadProfiles(p.id);
+  } catch (e) { alert("Не удалось сохранить профиль: " + e.message); }
+});
+$("#btnProfileDel").addEventListener("click", async () => {
+  const id = $("#profileSelect").value;
+  const p = PROFILES.find((x) => x.id === id);
+  if (!p || p.builtin || !confirm(`Удалить профиль «${p.name}»?`)) return;
+  try { await api(`/api/profiles/${id}`, { method: "DELETE" }); await loadProfiles(); }
+  catch (e) { alert("Не удалось удалить: " + e.message); }
+});
+
+// ---------------------------------------------------------------- файлы проекта (по одному)
+const SLOT_ORDER = [
+  ["network", "Выдельная сеть", "GeoJSON, поле label_name · образец «…_выдела+.geojson» (5_2)", ".geojson,.json", true, "Обязательные"],
+  ["lesoseki", "Контуры мероприятий — лесосеки", "GeoJSON · образец «…_лесосеки.geojson» (5_1)", ".geojson,.json", true, null],
+  ["taxation", "Таксационное описание (XLSX)", "как «Пример материалов ТО.xlsx» (5_2)", ".xlsx", false, "Таксационное описание: XLSX или CSV одного квартала"],
+  ["vydel_csv", "…или CSV: выдел", "cp1251, «;»", ".csv", false, null],
+  ["yarus_csv", "CSV: ярус", "", ".csv", false, null],
+  ["podrost_csv", "CSV: подрост", "необязательно", ".csv", false, null],
+  ["volumes", "Объём заготовленной древесины", "CSV как образец 5_3 · необязательно", ".csv", false, "Дополнительно"],
+];
+const sizeFmt = (b) => (b > 1048576 ? fmt(b / 1048576, 1) + " МБ" : fmt(b / 1024, 0) + " КБ");
+
+function clearView(msg) {
+  DATA = null;
+  mapReady.then(() => {
+    if (!map) return;
+    for (const src of ["before", "lesoseki", "fragments", "after", "sel"]) if (map.getSource(src)) map.getSource(src).setData(EMPTY);
+    drawLabels();
+  });
+  $("#metrics").innerHTML = `<p class="muted">${esc(msg)}</p>`;
+  $("#warnings").innerHTML = "";
+  $("#journal").innerHTML = "";
+  $("#toTable").innerHTML = "";
+  $("#tab-card").innerHTML = `<p class="muted pad">${esc(msg)}</p>`;
+}
+
+function openFiles(pid) {
+  FILES_PID = pid || null;
+  $("#filesNew").hidden = !!pid;
+  $("#filesBody").hidden = !pid;
+  $("#filesTitle").textContent = pid ? "Файлы проекта" : "Новый проект";
+  $("#filesMsgs").innerHTML = "";
+  if (pid) api(`/api/projects/${pid}/files`).then(renderFiles).catch((e) => alert(e.message));
+  if (!$("#dlgFiles").open) $("#dlgFiles").showModal();
+}
+
+function renderFiles(st, errMsg) {
+  $("#projName").value = st.name || "";
+  $("#slotRows").innerHTML = SLOT_ORDER.map(([slot, label, hint, accept, req, group]) => {
+    const f = st.files[slot];
+    const status = f ? `<span class="st-ok">✓ ${esc(f.name)} · ${sizeFmt(f.size)}</span>`
+      : req ? `<span class="st-req">нужен файл</span>` : `<span class="st-no">не загружен</span>`;
+    return (group ? `<tr class="group"><td colspan="3">${group}</td></tr>` : "") +
+      `<tr data-slot="${slot}"><td><div class="slot-name">${label}${req ? " *" : ""}</div><div class="slot-hint">${esc(hint)}</div></td>
+       <td class="st">${status}</td>
+       <td class="acts"><input type="file" accept="${accept}" hidden><button type="button" class="ghost pick">${f ? "Заменить" : "Выбрать…"}</button>
+       ${f ? '<button type="button" class="ghost danger rm" title="Удалить файл">✕</button>' : ""}</td></tr>`;
+  }).join("");
+  const m = [];
+  if (errMsg) m.push(`<div class="msg err">${esc(errMsg)}</div>`);
+  st.problems.forEach((x) => m.push(`<div class="msg err">${esc(x)}</div>`));
+  st.notes.forEach((x) => m.push(`<div class="msg note">${esc(x)}</div>`));
+  if (st.missing.length) m.push(`<div class="msg note">Не хватает обязательных файлов: ${st.missing.map((k) => SLOT_ORDER.find((s) => s[0] === k)[1]).join(", ")}.</div>`);
+  if (st.ready) m.push(`<div class="msg ok">Файлы в порядке — можно рассчитывать.</div>`);
+  $("#filesMsgs").innerHTML = m.join("");
+  $("#btnFilesRun").disabled = !st.ready;
+  $$("#slotRows tr[data-slot]").forEach((tr) => {
+    const slot = tr.dataset.slot, inp = $("input[type=file]", tr);
+    $(".pick", tr).addEventListener("click", () => inp.click());
+    inp.addEventListener("change", () => inp.files[0] && uploadSlot(slot, inp.files[0], tr));
+    const rm = $(".rm", tr);
+    if (rm) rm.addEventListener("click", async () => {
+      if (!confirm("Удалить этот файл из проекта?")) return;
+      try { renderFiles(await api(`/api/projects/${FILES_PID}/files/${slot}`, { method: "DELETE" })); } catch (e) { alert(e.message); }
+    });
+  });
+}
+
+async function uploadSlot(slot, file, tr) {
+  $(".st", tr).innerHTML = `<span class="st-busy">загрузка и проверка «${esc(file.name)}»…</span>`;
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await fetch(`/api/projects/${FILES_PID}/files/${slot}`, { method: "PUT", body: fd, credentials: "same-origin" });
+  if (r.status === 401) return toLogin();
+  const js = await r.json().catch(() => ({ detail: r.statusText }));
+  if (!r.ok) return renderFiles(await api(`/api/projects/${FILES_PID}/files`), js.detail || "ошибка загрузки");
+  renderFiles(js);
+}
+
+$("#btnNew").addEventListener("click", () => openFiles(null));
+$("#btnFiles").addEventListener("click", () => openFiles(PID));
+$("#btnFilesClose").addEventListener("click", () => $("#dlgFiles").close());
+$("#btnCreate").addEventListener("click", async () => {
+  try {
+    const st = await post("/api/projects/new", { name: $("#newName").value.trim() || "Проект" });
+    FILES_PID = PID = st.id;
+    $("#filesNew").hidden = true;
+    $("#filesBody").hidden = false;
+    $("#filesTitle").textContent = "Файлы проекта";
+    renderFiles(st);
+    await loadProjects(st.id);
+    clearView("Добавьте файлы проекта («Файлы проекта…»), затем «Рассчитать».");
+  } catch (e) { alert("Не удалось создать проект: " + e.message); }
+});
+$("#btnRename").addEventListener("click", async () => {
+  try {
+    await api(`/api/projects/${FILES_PID}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: $("#projName").value }) });
+    await loadProjects(PID);
+  } catch (e) { alert(e.message); }
+});
+$("#btnProjDel").addEventListener("click", async () => {
+  if (!confirm("Удалить проект целиком вместе с файлами?")) return;
+  try {
+    await api(`/api/projects/${FILES_PID}`, { method: "DELETE" });
+    $("#dlgFiles").close();
+    const list = await loadProjects();
+    if (FILES_PID === PID) { PID = null; if (list.length) openProject(list[0].id); else clearView("Проектов нет — откройте образец или создайте проект."); }
+  } catch (e) { alert(e.message); }
+});
+$("#btnFilesRun").addEventListener("click", async () => {
+  $("#dlgFiles").close();
+  PID = FILES_PID;
+  await loadProjects(PID);
+  runProject();
 });
 
 $("#btnLogout").addEventListener("click", async () => {
@@ -548,6 +690,7 @@ $("#btnLogout").addEventListener("click", async () => {
     $("#btnLogout").hidden = false;
   }
   CFG = await api("/api/config");
+  await loadProfiles();
   fillParams(null);
   const list = await loadProjects();
   if (list.length) openProject(list[0].id);

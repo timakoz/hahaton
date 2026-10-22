@@ -10,6 +10,7 @@ DATA_DIR = Path(os.environ.get("FM_DATA_DIR", ROOT))
 MODELS_DIR = Path(os.environ.get("FM_MODELS_DIR", ROOT / "models"))
 PROJECTS_DIR = Path(os.environ.get("FM_PROJECTS_DIR", ROOT / "data" / "projects"))
 PROCESSED_DIR = Path(os.environ.get("FM_PROCESSED_DIR", ROOT / "data" / "processed"))
+PROFILES_DIR = Path(os.environ.get("FM_PROFILES_DIR", ROOT / "data" / "profiles"))   # профили параметров из UI
 DB_PATH = Path(os.environ.get("FM_DB", ROOT / "data" / "app.db"))
 
 # Где искать сырые файлы: корень проекта (как сейчас лежат данные) и data/raw.

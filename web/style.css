@@ -153,6 +153,32 @@ tr:hover td { background: #f6f8f4; }
 dialog { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; width: min(520px, 94vw); }
 dialog::backdrop { background: rgba(0,0,0,.3); }
 dialog h3 { margin-top: 0; }
+.help-btn { width: 22px; height: 22px; padding: 0; border-radius: 50%; font-weight: 700; color: var(--accent); margin-left: 4px; }
+.profile-row { border: 1px dashed var(--line); border-radius: 6px; padding: 4px 8px 8px; margin-bottom: 6px; background: #fafbf8; }
+.profile-row select { width: 100%; }
+.row.tight { margin-top: 4px; gap: 6px; }
+.dlg-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dlg-head h3 { margin: 0; }
+#dlgFiles { width: min(640px, 96vw); }
+table.slots { margin: 10px 0; }
+table.slots td { padding: 6px 4px; vertical-align: middle; }
+table.slots .slot-name { font-weight: 600; font-size: 12px; }
+table.slots .slot-hint { font-size: 11px; color: var(--muted); }
+table.slots .st-ok { color: var(--ok); font-size: 12px; word-break: break-all; }
+table.slots .st-no { color: var(--muted); font-size: 12px; }
+table.slots .st-req { color: var(--warn); font-size: 12px; }
+table.slots .st-busy { color: var(--accent); font-size: 12px; }
+table.slots td.acts { white-space: nowrap; text-align: right; }
+table.slots tr.group td { padding-top: 10px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.msg { border-radius: 6px; padding: 6px 9px; margin: 6px 0; font-size: 12px; }
+.msg.err { background: #fef2f2; border: 1px solid #fecaca; color: #7f1d1d; }
+.msg.note { background: #f7f9f5; border: 1px solid var(--line); color: var(--muted); }
+.msg.ok { background: #ecfdf3; border: 1px solid #bbf7d0; color: #14532d; }
+#dlgHelp { width: min(760px, 96vw); }
+.help-body { max-height: 72vh; overflow: auto; line-height: 1.5; font-size: 13px; padding-right: 6px; }
+.help-body h4 { margin: 14px 0 4px; }
+.help-body ul { padding-left: 18px; margin: 4px 0; }
+.help-body .formula { background: #f7f9f5; border-left: 3px solid var(--accent); padding: 6px 10px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 dialog .hint { font-size: 11px; color: var(--muted); font-style: italic; }
 dialog p.small { margin: 0 0 6px; }
 dialog label { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; font-size: 12px; color: var(--muted); }

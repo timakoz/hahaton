@@ -14,3 +14,4 @@ models/
 catboost_info/
 logs/
 data/dev_credentials.txt
+data/profiles/

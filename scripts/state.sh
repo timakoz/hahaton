@@ -14,7 +14,7 @@ case "${1:-}" in
   export)
     OUT="${2:-$ROOT/forestmerge_state_$(date +%Y%m%d_%H%M).tgz}"
     ITEMS=()
-    for p in models data/app.db data/projects; do [[ -e "$p" ]] && ITEMS+=("$p"); done
+    for p in models data/app.db data/projects data/profiles; do [[ -e "$p" ]] && ITEMS+=("$p"); done
     [[ -d models ]] || { echo "Нет папки models/ — сначала обучите модели"; exit 1; }
     # catboost_info — логи обучения CatBoost, приложению не нужны
     tar czf "$OUT" --exclude='catboost_info' "${ITEMS[@]}"
